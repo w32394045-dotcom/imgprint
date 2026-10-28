@@ -1660,7 +1660,10 @@ var APP = (function () {
     applyI18n();
     bind();
     renderAll();
-    window.imgprint = { version: '1.0.0', core: CORE, i18n: I18N, state: state };
+    window.imgprint = {
+      version: '1.0.0', core: CORE, i18n: I18N, state: state,
+      render: renderAll, addFiles: addFiles, setLang: setLang
+    };
   }
 
   boot();

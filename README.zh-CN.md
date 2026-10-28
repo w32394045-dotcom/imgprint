@@ -113,15 +113,18 @@ ja 有假名、ko 有韩文。
 
 ## 验证
 
-发布前跑 `gate.js`（Node，无浏览器）：
+开发期用 Node 闸门跑过（工具不入库，仓库只留单文件应用）：
 
 ```
-PASS 122 · FAIL 0
+gate.js         PASS 122 · FAIL 0
+dom-smoke.js    PASS  28 · FAIL 0
 ```
 
 - 用 Pillow 造了 19 个真实图片夹具：sRGB/AdobeRGB/ProPhoto/P3 的 ICC（`desc` 与 v4 `mluc` 两种标签）、
   EXIF ColorSpace=1/2、CMYK JPEG、PNG iCCP、PNG cICP（HDR 与 P3）、WebP ICCP、GIF、AVIF/HEIC 的 `colr`、
   垃圾字节——全部分类正确。
+- DOM 冒烟测试用最小 DOM 桩**真的执行 app.js**：导入真实夹具、渲染 3 页、检查水印、切到日文、
+  开关水印，并通过真实的设置项 `change` 事件重新注入 `@page` 规则。
 - 版面 / DPI / 分页 / `@page` 全部对手算毫米值断言。
 - i18n：7 × 81 key 一致、占位符一致、en/de/fr 无中文、ja 有假名、ko 有韩文。
 - 卫生检查：单文件、无外链脚本/样式/远程 URL、无网络 API、无 HTML 注入 API、`localStorage` 仅 2 处、CSP 在位。

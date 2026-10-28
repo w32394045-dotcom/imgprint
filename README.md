@@ -124,15 +124,19 @@ To add a language: duplicate a pack inside `index.html` (`var PACKS = {...}`), a
 
 ## Verification
 
-Built and checked by `gate.js` (Node, no browser):
+Checked during development with a Node gate (not shipped — this repo is just the app):
 
 ```
-PASS 122 · FAIL 0
+gate.js         PASS 122 · FAIL 0
+dom-smoke.js    PASS  28 · FAIL 0
 ```
 
 - 19 real image fixtures generated with Pillow — sRGB/AdobeRGB/ProPhoto/P3 ICC (both `desc` and
   v4 `mluc`), EXIF ColorSpace 1/2, CMYK JPEG, PNG iCCP, PNG cICP (HDR + P3), WebP ICCP, GIF,
   AVIF/HEIC `colr`, junk bytes — all classified correctly.
+- The DOM smoke test boots the real `app.js` against a minimal DOM shim: imports real fixtures,
+  renders 3 pages, checks the printed watermark, switches to Japanese, toggles the watermark, and
+  re-injects the `@page` rule through the actual settings `change` handlers.
 - Layout/DPI/pagination/`@page` math asserted against hand-computed millimetre values.
 - i18n: 7 × 81 keys, identical key and placeholder sets, no untranslated Chinese in en/de/fr,
   kana present in ja, Hangul present in ko.
