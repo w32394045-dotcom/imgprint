@@ -1,0 +1,1670 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light">
+<meta name="description" content="imgprint — print images on paper, locally in your browser. No upload, no account.">
+<meta name="referrer" content="no-referrer">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src 'self' blob: data:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; base-uri 'none'; form-action 'none'">
+<title>imgprint</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%232f6fed'/%3E%3Cpath d='M8 21.5l5.2-6.2 3.4 4 2.6-3.1 5 5.3z' fill='%23fff'/%3E%3Ccircle cx='12.2' cy='11.4' r='2.2' fill='%23fff'/%3E%3C/svg%3E">
+<style>
+/* ============================================================
+   imgprint — 图片打印器
+   单文件、离线、纯本地。视觉：白底 + 蓝（#2f6fed），与 md2pdf 同一套调性。
+   ============================================================ */
+
+*,*::before,*::after{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+:root{
+  --bg:#f3f6fb;
+  --panel:#fff;
+  --text:#1b1d21;
+  --muted:#6b7280;
+  --line:#e3e8f1;
+  --line-strong:#cfd9ea;
+  --accent:#2f6fed;
+  --accent-hover:#245ed6;
+  --accent-weak:#eaf1ff;
+  --ink-soft:#4b5563;
+  --ok:#1f7a4d;
+  --warn:#8a5200;
+  --warn-bg:#fff7e8;
+  --warn-line:#f0dbb0;
+  --radius:12px;
+  --radius-sm:8px;
+  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","HarmonyOS Sans SC","Noto Sans CJK SC","Source Han Sans SC","Microsoft YaHei",sans-serif;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+  --shadow:0 1px 2px rgba(16,24,40,.05),0 10px 30px rgba(16,24,40,.07);
+}
+html,body{margin:0;padding:0}
+body{
+  background:var(--bg);color:var(--text);
+  font:14px/1.5 var(--sans);
+  min-height:100vh;display:flex;flex-direction:column;
+}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+button,input,select{font:inherit;color:inherit}
+button{cursor:pointer;background:none;border:0;padding:0}
+img{max-width:100%}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:6px}
+.sr-only{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
+.ico{width:18px;height:18px;display:block;flex:none;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+
+/* ---------- header ---------- */
+.top{
+  position:sticky;top:0;z-index:30;
+  display:flex;align-items:center;justify-content:space-between;gap:16px;
+  padding:10px 20px;
+  background:rgba(255,255,255,.88);
+  border-bottom:1px solid var(--line);
+  backdrop-filter:saturate(180%) blur(10px);
+}
+.brand{display:flex;align-items:center;gap:10px;min-width:0}
+.logo{
+  width:32px;height:32px;flex:none;border-radius:9px;
+  background:linear-gradient(180deg,#4b83f5,#2f6fed);
+  display:grid;place-items:center;
+  box-shadow:0 1px 2px rgba(47,111,237,.35);
+}
+.logo svg{width:18px;height:18px;stroke:#fff;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.brand-text{min-width:0}
+.brand-text b{display:block;font-size:15.5px;line-height:1.15;letter-spacing:-.01em}
+.brand-text small{display:block;color:var(--muted);font-size:11.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.top-actions{display:flex;align-items:center;gap:8px;flex:none}
+.lang{display:flex;align-items:center;gap:6px;color:var(--muted)}
+.lang .ico{width:16px;height:16px}
+.lang select{
+  border:1px solid var(--line);background:#fff;border-radius:8px;
+  padding:5px 6px;max-width:158px;color:var(--text);font-size:13px;
+}
+.icon-btn{
+  width:36px;height:36px;border-radius:9px;display:grid;place-items:center;
+  color:var(--ink-soft);border:1px solid transparent;
+}
+.icon-btn:hover{background:#eef2f9;color:var(--text)}
+.btn{
+  display:inline-flex;align-items:center;justify-content:center;gap:7px;
+  height:36px;padding:0 16px;border-radius:9px;
+  border:1px solid var(--line);background:#fff;font-weight:600;font-size:13.5px;
+  white-space:nowrap;
+}
+.btn:hover{background:#f6f8fc}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn.primary:hover{background:var(--accent-hover)}
+.btn:disabled{opacity:.42;cursor:not-allowed}
+.btn.ghost{color:var(--muted);border-color:var(--line);background:#fbfcfe}
+.btn .ico{width:16px;height:16px}
+
+/* ---------- layout ---------- */
+.layout{
+  width:100%;max-width:1440px;margin:0 auto;flex:1;
+  padding:18px 20px 10px;
+  display:grid;grid-template-columns:340px minmax(0,1fr);gap:18px;align-items:start;
+}
+.panel{
+  background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);
+  box-shadow:var(--shadow);
+}
+.side{
+  position:sticky;top:74px;
+  max-height:calc(100vh - 92px);
+  padding:14px;display:flex;flex-direction:column;gap:12px;
+  min-height:0;
+}
+.side-head{display:flex;align-items:center;gap:8px;min-height:24px}
+.side-head h2{
+  margin:0;font-size:11.5px;font-weight:700;letter-spacing:.08em;
+  text-transform:uppercase;color:var(--muted);
+}
+.count{
+  display:inline-flex;align-items:center;justify-content:center;min-width:20px;height:20px;
+  padding:0 6px;border-radius:999px;background:var(--accent-weak);color:var(--accent);
+  font-size:11px;font-weight:700;
+}
+.side-head .btn{margin-left:auto;height:30px;padding:0 10px;font-size:12px}
+
+/* ---------- dropzone ---------- */
+.dropzone{
+  border:1.5px dashed var(--line-strong);border-radius:10px;background:#fbfcff;
+  color:var(--muted);text-align:center;cursor:pointer;
+  transition:border-color .15s ease,background .15s ease;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;
+  padding:14px 12px;
+}
+.dropzone:hover,.dropzone:focus-visible{border-color:var(--accent);background:var(--accent-weak)}
+.dropzone.drag{border-color:var(--accent);background:var(--accent-weak);border-style:solid}
+.dropzone.big{flex:1;min-height:300px;padding:26px 18px;gap:7px}
+.dropzone .drop-ico{
+  width:44px;height:44px;border-radius:12px;background:var(--accent-weak);
+  display:grid;place-items:center;color:var(--accent);margin-bottom:2px;
+}
+.dropzone .drop-ico .ico{width:22px;height:22px}
+.dropzone b{color:var(--text);font-size:13.5px;line-height:1.4}
+.dropzone span{font-size:12px;line-height:1.45}
+.dropzone .fake-btn{
+  display:inline-flex;align-items:center;height:32px;padding:0 14px;margin-top:4px;
+  border-radius:8px;background:var(--accent);color:#fff;font-weight:600;font-size:12.5px;
+}
+.dropzone .formats{font-family:var(--mono);font-size:10.5px;color:#9aa3b2;letter-spacing:.02em}
+.dropzone.big .local{margin-top:6px;font-size:11.5px;color:#8a93a3}
+
+/* ---------- image list ---------- */
+.list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px;overflow:auto;flex:1;min-height:0}
+.list[hidden]{display:none}
+.card{
+  display:grid;grid-template-columns:64px minmax(0,1fr) auto;gap:10px;align-items:center;
+  padding:7px;border:1px solid var(--line);border-radius:10px;background:#fff;
+}
+.card:hover{border-color:var(--line-strong);background:#fcfdff}
+.thumb{width:64px;height:64px;border-radius:8px;overflow:hidden;background:#eef2f8;border:1px solid var(--line)}
+.thumb img{width:100%;height:100%;object-fit:cover;display:block}
+.card-body{min-width:0}
+.card .name{font-size:12.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.card .sub{font-size:10.5px;color:var(--muted);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.chips{display:flex;flex-wrap:wrap;gap:4px;margin-top:5px}
+.chip{
+  display:inline-flex;align-items:center;height:18px;padding:0 6px;border-radius:6px;
+  font-size:10.5px;font-weight:600;letter-spacing:.01em;
+  background:#f1f4f9;color:#59636f;border:1px solid #e6eaf1;white-space:nowrap;
+}
+.chip.ok{background:#eef8f2;color:var(--ok);border-color:#d6eee0}
+.chip.warn{background:var(--warn-bg);color:var(--warn);border-color:var(--warn-line)}
+.chip.muted{color:#8a93a3}
+.actions{display:flex;flex-direction:column;gap:2px}
+.mini{
+  width:24px;height:24px;border-radius:6px;display:grid;place-items:center;
+  color:#8a93a3;border:1px solid transparent;
+}
+.mini:hover{background:#eef2f9;color:var(--text)}
+.mini .ico{width:14px;height:14px}
+.mini[disabled]{opacity:.25;cursor:default}
+@media (hover:hover){
+  .actions{opacity:0;transition:opacity .12s ease}
+  .card:hover .actions,.card:focus-within .actions{opacity:1}
+}
+.more{
+  display:flex;align-items:center;justify-content:center;gap:6px;
+  height:36px;border:1px dashed var(--line-strong);border-radius:9px;
+  color:var(--accent);font-weight:600;font-size:12.5px;background:#fbfcff;
+}
+.more:hover{background:var(--accent-weak);border-color:var(--accent)}
+.more[hidden]{display:none}
+
+/* ---------- preview ---------- */
+.preview{padding:14px;min-height:60vh;display:flex;flex-direction:column}
+.preview-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:1px 2px 12px}
+.preview-head h2{margin:0;font-size:14px;font-weight:700;letter-spacing:-.01em}
+.status{margin-left:auto;display:flex;align-items:center;gap:8px;flex-wrap:wrap;color:var(--muted);font-size:12px}
+.status .sep{width:3px;height:3px;border-radius:50%;background:#c6cedb}
+.status .ready{color:var(--ok);font-weight:600}
+.alerts{display:flex;flex-direction:column;gap:8px;margin:0 2px 12px}
+.alerts[hidden]{display:none}
+.alert{
+  display:flex;gap:10px;padding:10px 12px;border:1px solid var(--warn-line);
+  background:var(--warn-bg);border-radius:10px;color:#5c3a00;
+}
+.alert .alert-ico{
+  width:20px;height:20px;flex:none;border-radius:50%;background:#f3c969;color:#5c3a00;
+  display:grid;place-items:center;font-weight:800;font-size:12px;margin-top:1px;
+}
+.alert b{display:block;font-size:12.5px;line-height:1.4}
+.alert p{margin:2px 0 0;font-size:12px;line-height:1.55;color:#6b4a12}
+.alert .mini{margin-left:auto;align-self:flex-start;color:#8a5200}
+.alert .mini:hover{background:#f7e6c2;color:#5c3a00}
+
+#sheets{display:flex;flex-direction:column;align-items:center;gap:22px;padding:4px 0 8px}
+.preview-empty{
+  flex:1;min-height:340px;display:grid;place-items:center;
+  color:var(--muted);font-size:13px;text-align:center;padding:24px;
+  border:1px dashed var(--line);border-radius:10px;background:#fbfcff;margin:2px;
+}
+.preview-empty[hidden]{display:none}
+
+/* ---------- printed sheet (screen preview == print layout) ---------- */
+.sheet-wrap{position:relative;margin:0 auto;flex:none}
+.sheet{
+  position:absolute;left:0;top:0;transform-origin:0 0;
+  width:var(--pw);height:var(--ph);background:#fff;
+  box-shadow:0 1px 2px rgba(16,24,40,.10),0 14px 34px rgba(16,24,40,.12);
+  overflow:hidden;
+}
+.sheet-inner{
+  position:absolute;inset:var(--mg);
+  display:grid;
+  grid-template-columns:repeat(var(--cols),minmax(0,1fr));
+  grid-template-rows:repeat(var(--rows),minmax(0,1fr));
+  gap:var(--gap);
+}
+.slot{display:flex;flex-direction:column;min-width:0;min-height:0;overflow:hidden}
+.slot .imgbox{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;overflow:hidden;background:#fff}
+.slot img{display:block;width:100%;height:100%;object-fit:contain}
+.slot img.cover{object-fit:cover}
+.slot .cap{
+  flex:none;font-size:7.5pt;line-height:1.3;color:#6b7280;text-align:center;
+  padding-top:1.2mm;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.wm{
+  position:absolute;left:0;right:0;bottom:2.2mm;
+  text-align:center;font-size:6.5pt;line-height:1.5;color:#8a93a3;
+  letter-spacing:.02em;padding:0 4mm;word-break:break-word;
+}
+.wm a{color:inherit;text-decoration:none}
+.wm .site{color:#2f6fed;font-weight:600}
+.wm .sep{opacity:.5;padding:0 2px}
+
+/* ---------- drawer ---------- */
+.scrim{position:fixed;inset:0;background:rgba(15,23,42,.28);z-index:40;border:0}
+.scrim[hidden]{display:none}
+.drawer{
+  position:fixed;top:0;right:0;bottom:0;width:min(382px,100vw);z-index:50;
+  background:#fff;box-shadow:-12px 0 40px rgba(16,24,40,.18);
+  display:flex;flex-direction:column;
+  transform:translateX(101%);transition:transform .22s ease;
+  visibility:hidden;
+}
+.drawer.open{transform:none;visibility:visible}
+.drawer-head{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid var(--line);flex:none}
+.drawer-head h2{margin:0;font-size:15px;letter-spacing:-.01em}
+.drawer-head .icon-btn{margin-left:auto}
+.drawer-body{padding:16px;overflow:auto;display:flex;flex-direction:column;gap:14px}
+.field{display:flex;flex-direction:column;gap:6px}
+.field>span{font-size:11px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+.field select{
+  height:38px;border:1px solid var(--line);border-radius:9px;padding:0 10px;
+  background:#fff;font-size:13.5px;
+}
+.field select:hover{border-color:var(--line-strong)}
+.check{display:flex;align-items:center;gap:9px;font-size:13.5px;cursor:pointer}
+.check input{width:17px;height:17px;accent-color:var(--accent);margin:0}
+.hint{margin:-6px 0 0;font-size:12px;color:var(--muted);line-height:1.55}
+.drawer h3{
+  margin:6px 0 0;font-size:11px;font-weight:700;letter-spacing:.07em;
+  text-transform:uppercase;color:var(--muted);
+}
+.tips{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:6px;font-size:12.5px;color:var(--ink-soft);line-height:1.55}
+.tips li::marker{color:var(--accent)}
+.drawer .btn{margin-top:4px}
+
+/* ---------- misc ---------- */
+#sheets[hidden]{display:none}
+.dropzone:not(.big) .local{display:none}
+.dropzone:not(.big) .formats{display:none}
+.noscript{margin:0;padding:14px 20px;background:var(--warn-bg);color:var(--warn);text-align:center}
+
+/* ---------- toast ---------- */
+.toast{
+  position:fixed;left:50%;bottom:26px;transform:translateX(-50%);z-index:60;
+  background:#1b1d21;color:#fff;padding:9px 14px;border-radius:10px;
+  font-size:13px;line-height:1.45;max-width:min(560px,calc(100vw - 40px));
+  box-shadow:0 12px 34px rgba(0,0,0,.28);
+}
+.toast[hidden]{display:none}
+
+/* ---------- footer ---------- */
+.foot{
+  display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap;
+  padding:14px 20px 22px;color:var(--muted);font-size:12px;
+}
+.foot a{color:var(--muted)}
+.foot a:hover{color:var(--accent)}
+.foot .sep{opacity:.45}
+
+/* ---------- responsive ---------- */
+@media (max-width:960px){
+  .layout{grid-template-columns:1fr;gap:14px}
+  .side{position:static;max-height:none}
+  .side .list{max-height:44vh}
+  .brand-text small{display:none}
+}
+@media (max-width:600px){
+  .top{padding:9px 12px}
+  .layout{padding:12px 12px 6px}
+  .btn{padding:0 12px}
+  .lang select{max-width:112px}
+  .preview{padding:10px}
+}
+
+/* ---------- print ---------- */
+@media print{
+  html,body{background:#fff!important}
+  body{display:block}
+  .top,.side,.foot,.drawer,.scrim,.toast,.preview-head,.alerts,.preview-empty{display:none!important}
+  .layout{display:block!important;padding:0!important;max-width:none!important}
+  .preview{padding:0!important;border:0!important;border-radius:0!important;box-shadow:none!important;background:transparent!important;min-height:0!important}
+  #sheets{display:block!important;padding:0!important;gap:0!important}
+  .sheet-wrap{position:static!important;width:auto!important;height:auto!important;margin:0!important;break-after:page}
+  .sheet{
+    position:static!important;transform:none!important;
+    box-shadow:none!important;border-radius:0!important;
+    width:var(--pw);height:var(--ph);
+  }
+  .sheet-wrap:last-child{break-after:auto}
+  .sheet-wrap:last-child .sheet{break-after:auto}
+}
+@media (prefers-reduced-motion:reduce){
+  .drawer{transition:none}
+  .dropzone{transition:none}
+}
+</style>
+</head>
+<body>
+<noscript><p class="noscript">imgprint needs JavaScript to run — everything stays on your device.</p></noscript>
+
+<header class="top">
+  <div class="brand">
+    <span class="logo" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 6.5A2.5 2.5 0 0 1 6.5 4h11A2.5 2.5 0 0 1 20 6.5v11a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 17.5z"/><path d="M4 15l4.6-4.8 3.2 3.4 2.4-2.8L20 16"/><circle cx="9.2" cy="8.6" r="1.4"/></svg></span>
+    <span class="brand-text"><b>imgprint</b><small data-i18n="app.tagline"></small></span>
+  </div>
+  <div class="top-actions">
+    <label class="lang">
+      <span class="sr-only" data-i18n="a11y.lang"></span>
+      <svg class="ico" aria-hidden="true" focusable="false"><use href="#i-globe"></use></svg>
+      <select id="langSel"></select>
+    </label>
+    <button id="btnSettings" class="icon-btn" type="button" data-i18n-aria="a11y.settings" data-i18n-title="btn.settings">
+      <svg class="ico" aria-hidden="true" focusable="false"><use href="#i-settings"></use></svg>
+    </button>
+    <button id="btnPrint" class="btn primary" type="button" data-i18n-aria="a11y.print" disabled>
+      <svg class="ico" aria-hidden="true" focusable="false"><use href="#i-print"></use></svg><span data-i18n="btn.print"></span>
+    </button>
+  </div>
+</header>
+
+<main class="layout">
+  <section class="side panel" aria-labelledby="sideTitle">
+    <div class="side-head">
+      <h2 id="sideTitle" data-i18n="images.title"></h2>
+      <span id="imgCount" class="count" hidden>0</span>
+    </div>
+    <div id="dropzone" class="dropzone big" role="button" tabindex="0" aria-labelledby="dropTitle">
+      <span class="drop-ico" aria-hidden="true"><svg class="ico" focusable="false"><use href="#i-photo"></use></svg></span>
+      <b id="dropTitle" data-i18n="drop.title"></b>
+      <span data-i18n="drop.sub"></span>
+      <span class="fake-btn" data-i18n="btn.pick"></span>
+      <span class="formats" data-i18n="drop.formats"></span>
+      <span class="local" data-i18n="drop.local"></span>
+    </div>
+    <ol id="imgList" class="list" hidden></ol>
+  </section>
+
+  <section class="preview panel" aria-labelledby="previewTitle">
+    <div class="preview-head">
+      <h2 id="previewTitle" data-i18n="preview.title"></h2>
+      <div id="status" class="status"></div>
+    </div>
+    <div id="alerts" class="alerts" hidden></div>
+    <div id="sheets" hidden></div>
+    <div id="previewEmpty" class="preview-empty" data-i18n="preview.empty"></div>
+  </section>
+</main>
+
+<footer class="foot">
+  <span data-i18n="footer.local"></span>
+  <span class="sep" aria-hidden="true">·</span>
+  <a href="https://github.com/w32394045-dotcom/imgprint" target="_blank" rel="noopener noreferrer">github.com/w32394045-dotcom/imgprint</a>
+  <span class="sep" aria-hidden="true">·</span>
+  <span data-i18n="footer.license"></span>
+</footer>
+
+<div id="scrim" class="scrim" hidden></div>
+<aside id="settings" class="drawer" role="dialog" aria-modal="true" aria-labelledby="setTitle" aria-hidden="true">
+  <div class="drawer-head">
+    <h2 id="setTitle" data-i18n="set.title"></h2>
+    <button id="btnClose" class="icon-btn" type="button" data-i18n-aria="btn.close" data-i18n-title="btn.close">
+      <svg class="ico" aria-hidden="true" focusable="false"><use href="#i-close"></use></svg>
+    </button>
+  </div>
+  <div class="drawer-body">
+    <label class="field"><span data-i18n="set.paper"></span>
+      <select id="optPaper">
+        <option value="a4" data-i18n="paper.a4"></option>
+        <option value="a5" data-i18n="paper.a5"></option>
+        <option value="b5" data-i18n="paper.b5"></option>
+        <option value="letter" data-i18n="paper.letter"></option>
+        <option value="photo" data-i18n="paper.photo"></option>
+      </select>
+    </label>
+    <label class="field"><span data-i18n="set.orient"></span>
+      <select id="optOrient">
+        <option value="p" data-i18n="orient.portrait"></option>
+        <option value="l" data-i18n="orient.landscape"></option>
+      </select>
+    </label>
+    <label class="field"><span data-i18n="set.margin"></span>
+      <select id="optMargin">
+        <option value="none" data-i18n="margin.none"></option>
+        <option value="narrow" data-i18n="margin.narrow"></option>
+        <option value="wide" data-i18n="margin.wide"></option>
+      </select>
+    </label>
+    <label class="field"><span data-i18n="set.perpage"></span>
+      <select id="optPerPage">
+        <option value="1" data-i18n="perpage.1"></option>
+        <option value="2" data-i18n="perpage.2"></option>
+        <option value="4" data-i18n="perpage.4"></option>
+      </select>
+    </label>
+    <label class="field"><span data-i18n="set.fit"></span>
+      <select id="optFit">
+        <option value="contain" data-i18n="fit.contain"></option>
+        <option value="cover" data-i18n="fit.cover"></option>
+      </select>
+    </label>
+    <label class="check"><input type="checkbox" id="optCaption"><span data-i18n="set.caption"></span></label>
+    <label class="check"><input type="checkbox" id="optWatermark"><span data-i18n="set.watermark"></span></label>
+    <p class="hint" data-i18n="set.watermarkHint"></p>
+    <h3 data-i18n="set.tips"></h3>
+    <ul class="tips">
+      <li data-i18n="tips.1"></li>
+      <li data-i18n="tips.2"></li>
+      <li data-i18n="tips.3"></li>
+      <li data-i18n="tips.4"></li>
+    </ul>
+    <button id="btnReset" class="btn ghost" type="button" data-i18n="set.reset"></button>
+  </div>
+</aside>
+
+<div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+<input id="fileInput" type="file" accept="image/*" multiple hidden>
+
+<svg aria-hidden="true" focusable="false" style="position:absolute;width:0;height:0;overflow:hidden">
+  <symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><ellipse cx="12" cy="12" rx="4" ry="9"/><path d="M3.4 9h17.2M3.4 15h17.2"/></symbol>
+  <symbol id="i-settings" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.2"/><path d="M19.4 13.7a7.6 7.6 0 0 0 0-3.4l2-1.5-1.9-3.3-2.4.9a7.6 7.6 0 0 0-2.9-1.7L13.9 2h-3.8l-.3 2.7a7.6 7.6 0 0 0-2.9 1.7l-2.4-.9-1.9 3.3 2 1.5a7.6 7.6 0 0 0 0 3.4l-2 1.5 1.9 3.3 2.4-.9a7.6 7.6 0 0 0 2.9 1.7l.3 2.7h3.8l.3-2.7a7.6 7.6 0 0 0 2.9-1.7l2.4.9 1.9-3.3z"/></symbol>
+  <symbol id="i-print" viewBox="0 0 24 24"><path d="M6.5 9V3.5h11V9"/><rect x="3" y="9" width="18" height="7.5" rx="2"/><path d="M6.5 14.5h11V21h-11z"/><path d="M17.5 12h.01"/></symbol>
+  <symbol id="i-photo" viewBox="0 0 24 24"><rect x="3" y="4.5" width="18" height="15" rx="2.5"/><path d="M3 16l4.8-4.9 3.3 3.5 2.5-2.9 4.4 4.3"/><circle cx="8.9" cy="9.4" r="1.6"/></symbol>
+  <symbol id="i-close" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+  <symbol id="i-up" viewBox="0 0 24 24"><path d="M6 14.5l6-6 6 6"/></symbol>
+  <symbol id="i-down" viewBox="0 0 24 24"><path d="M6 9.5l6 6 6-6"/></symbol>
+  <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4.5 6.5h15M9.5 6.5V4.8c0-.7.6-1.3 1.3-1.3h2.4c.7 0 1.3.6 1.3 1.3v1.7M6.5 6.5l.8 12.2c.1 1 .9 1.8 1.9 1.8h5.6c1 0 1.8-.8 1.9-1.8l.8-12.2M10 10.5v6M14 10.5v6"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+</svg>
+<script>
+/*==I18N-START==*/
+var I18N = (function () {
+  'use strict';
+  var PACKS = {"zh-CN":{"app.title":"imgprint · 图片打印器","app.tagline":"只在本机处理，不上传","btn.settings":"打印设置","btn.print":"打印","btn.close":"关闭","btn.pick":"选择图片","drop.title":"把图片拖到这里","drop.sub":"点一下也能选，支持多选；Ctrl+V 可以直接粘贴截图","drop.local":"图片只在内存里处理，不上传、不保存","drop.formats":"JPG / PNG / WebP / AVIF / GIF","images.title":"图片","images.limit":"最多放 {0} 张，多出的 {1} 张没有加进来","badge.colorOkT":"按 sRGB 打印，不做色彩转换","badge.colorWarnT":"不是 sRGB：直接打印可能偏色，最好先转成 sRGB","badge.dpiT":"按当前纸张和排版估算的打印分辨率","badge.dpi":"{0} dpi","badge.dpiLow":"{0} dpi · 略低","badge.dpiBad":"{0} dpi · 会糊","color.srgb":"sRGB","color.untagged":"无 ICC · 按 sRGB","color.icc":"ICC 配置","color.adobe":"AdobeRGB","color.p3":"Display P3","color.prophoto":"ProPhoto","color.cmyk":"CMYK","color.gray":"灰度","color.hdr":"HDR","color.unknown":"色彩未知","alert.colorTitle":"{0} 张图不是 sRGB","alert.colorBody":"imgprint 按浏览器显示的像素直接打印，不做色彩转换。要颜色准，先用图像软件把它们转成 sRGB。","alert.hdrTitle":"有 HDR 图片","alert.hdrBody":"打印只有 SDR，HDR 图会压暗或发灰。","set.title":"打印设置","set.paper":"纸张","paper.a4":"A4 · 210 × 297 mm","paper.a5":"A5 · 148 × 210 mm","paper.b5":"B5 · 176 × 250 mm","paper.letter":"Letter · 216 × 279 mm","paper.photo":"6 寸照片 · 102 × 152 mm","set.orient":"方向","orient.portrait":"纵向","orient.landscape":"横向","set.margin":"边距","margin.none":"无（满版）","margin.narrow":"窄 · 5 mm","margin.wide":"宽 · 12 mm","set.perpage":"每页放几张","perpage.1":"1 张","perpage.2":"2 张","perpage.4":"4 张","set.fit":"图片怎么放","fit.contain":"完整显示，留白","fit.cover":"铺满整页，裁掉边","set.caption":"图片下面显示文件名","set.watermark":"页脚推广信息","set.watermarkHint":"每页底部印上项目网址。纸上点不了链接，所以把网址直接印出来。","set.tips":"打印小贴士","tips.1":"打印对话框里，边距选「无」，缩放保持 100%","tips.2":"记得勾上「背景图形」，不然满版图可能留白","tips.3":"屏幕和打印不可能一模一样：网页读不到打印机的色彩配置","tips.4":"低于 150 dpi 会明显糊，300 dpi 以上就够","set.reset":"恢复默认设置","preview.title":"打印预览","preview.empty":"添加图片后，这里就是实际打印出来的样子","status.images":"图片 {0}","status.perPage":"每页 {0} 张","status.pages":"页数 {0}","status.ready":"可以打印","status.none":"先添加图片","toast.unsupported":"浏览器打不开这个格式：{0}","toast.decode":"这张图打不开：{0}","toast.read":"读不了这个文件：{0}","toast.reset":"已恢复默认设置","footer.license":"开源 · MIT","footer.local":"完全本地运行，不联网","a11y.lang":"界面语言","a11y.remove":"移除这张图","a11y.moveUp":"往上挪","a11y.moveDown":"往下挪","a11y.print":"打印","a11y.settings":"打开打印设置"},"zh-TW":{"app.title":"imgprint · 圖片列印器","app.tagline":"只在本機處理，不上傳","btn.settings":"列印設定","btn.print":"列印","btn.close":"關閉","btn.pick":"選擇圖片","drop.title":"把圖片拖到這裡","drop.sub":"點一下也能選，支援多選；Ctrl+V 可以直接貼上截圖","drop.local":"圖片只在記憶體裡處理，不上傳、不儲存","drop.formats":"JPG / PNG / WebP / AVIF / GIF","images.title":"圖片","images.limit":"最多放 {0} 張，多出的 {1} 張沒有加進來","badge.colorOkT":"以 sRGB 列印，不做色彩轉換","badge.colorWarnT":"不是 sRGB：直接列印可能偏色，最好先轉成 sRGB","badge.dpiT":"依目前紙張和排版估算的列印解析度","badge.dpi":"{0} dpi","badge.dpiLow":"{0} dpi · 略低","badge.dpiBad":"{0} dpi · 會模糊","color.srgb":"sRGB","color.untagged":"無 ICC · 以 sRGB 列印","color.icc":"ICC 設定檔","color.adobe":"AdobeRGB","color.p3":"Display P3","color.prophoto":"ProPhoto","color.cmyk":"CMYK","color.gray":"灰階","color.hdr":"HDR","color.unknown":"色彩未知","alert.colorTitle":"{0} 張圖不是 sRGB","alert.colorBody":"imgprint 依瀏覽器顯示的像素直接列印，不做色彩轉換。要顏色準，先用影像軟體把它們轉成 sRGB。","alert.hdrTitle":"有 HDR 圖片","alert.hdrBody":"列印只有 SDR，HDR 圖會壓暗或偏灰。","set.title":"列印設定","set.paper":"紙張","paper.a4":"A4 · 210 × 297 mm","paper.a5":"A5 · 148 × 210 mm","paper.b5":"B5 · 176 × 250 mm","paper.letter":"Letter · 216 × 279 mm","paper.photo":"6 吋照片 · 102 × 152 mm","set.orient":"方向","orient.portrait":"直式","orient.landscape":"橫式","set.margin":"邊界","margin.none":"無（滿版）","margin.narrow":"窄 · 5 mm","margin.wide":"寬 · 12 mm","set.perpage":"每頁放幾張","perpage.1":"1 張","perpage.2":"2 張","perpage.4":"4 張","set.fit":"圖片怎麼放","fit.contain":"完整顯示，留白","fit.cover":"填滿整頁，裁掉邊","set.caption":"圖片下方顯示檔名","set.watermark":"頁尾推廣資訊","set.watermarkHint":"每頁底部印上專案網址。紙上點不了連結，所以把網址直接印出來。","set.tips":"列印小提醒","tips.1":"列印對話框裡，邊界選「無」，縮放保持 100%","tips.2":"記得勾選「背景圖形」，不然滿版圖可能留白","tips.3":"螢幕和列印不可能一模一樣：網頁讀不到印表機的色彩設定檔","tips.4":"低於 150 dpi 會明顯模糊，300 dpi 以上就夠","set.reset":"恢復預設設定","preview.title":"列印預覽","preview.empty":"新增圖片後，這裡就是實際列印出來的樣子","status.images":"圖片 {0}","status.perPage":"每頁 {0} 張","status.pages":"頁數 {0}","status.ready":"可以列印","status.none":"先新增圖片","toast.unsupported":"瀏覽器打不開這個格式：{0}","toast.decode":"這張圖打不開：{0}","toast.read":"讀不了這個檔案：{0}","toast.reset":"已恢復預設設定","footer.license":"開源 · MIT","footer.local":"完全本機執行，不連網","a11y.lang":"介面語言","a11y.remove":"移除這張圖片","a11y.moveUp":"往上挪","a11y.moveDown":"往下挪","a11y.print":"列印","a11y.settings":"開啟列印設定"},"ja":{"app.title":"imgprint · 画像プリント","app.tagline":"端末の中だけで処理します","btn.settings":"印刷設定","btn.print":"印刷","btn.close":"閉じる","btn.pick":"画像を選ぶ","drop.title":"画像をここにドロップ","drop.sub":"クリックして選ぶこともできます。複数枚 OK、Ctrl+V でスクショも貼れます。","drop.local":"画像はメモリ上だけで扱い、送信も保存もしません。","drop.formats":"JPG / PNG / WebP / AVIF / GIF","images.title":"画像","images.limit":"画像は {0} 枚まで（{1} 枚は追加していません）","badge.colorOkT":"sRGB として印刷します（色変換なし）","badge.colorWarnT":"sRGB ではない画像です。先に変換しないと、印刷で色がずれることがあります。","badge.dpiT":"この用紙とレイアウトでの推定解像度","badge.dpi":"{0} dpi","badge.dpiLow":"{0} dpi · やや低め","badge.dpiBad":"{0} dpi · ぼやけます","color.srgb":"sRGB","color.untagged":"ICC なし（sRGB とみなす）","color.icc":"ICC プロファイル","color.adobe":"AdobeRGB","color.p3":"Display P3","color.prophoto":"ProPhoto","color.cmyk":"CMYK","color.gray":"グレースケール","color.hdr":"HDR","color.unknown":"色空間が不明","alert.colorTitle":"sRGB 以外の画像が {0} 枚あります","alert.colorBody":"imgprint はブラウザに表示されている画素をそのまま印刷し、色変換はしません。色を正確にしたい場合は、先に画像ソフトで sRGB に変換してください。","alert.hdrTitle":"HDR 画像があります","alert.hdrBody":"印刷は SDR なので、HDR 画像は暗め・灰色っぽくなります。","set.title":"印刷設定","set.paper":"用紙","paper.a4":"A4 · 210 × 297 mm","paper.a5":"A5 · 148 × 210 mm","paper.b5":"B5 · 176 × 250 mm","paper.letter":"Letter · 216 × 279 mm","paper.photo":"6 インチ写真 · 102 × 152 mm","set.orient":"向き","orient.portrait":"縦","orient.landscape":"横","set.margin":"余白","margin.none":"なし（フチなし）","margin.narrow":"狭い · 5 mm","margin.wide":"広い · 12 mm","set.perpage":"1ページの枚数","perpage.1":"1 枚","perpage.2":"2 枚","perpage.4":"4 枚","set.fit":"画像の配置","fit.contain":"全体を表示（余白あり）","fit.cover":"用紙いっぱい（はみ出しは切り取り）","set.caption":"画像の下にファイル名を表示","set.watermark":"フッターのプロモーション表記","set.watermarkHint":"各ページの下部にプロジェクトの URL を入れます。紙の上ではリンクを押せないので、URL をそのまま印字します。","set.tips":"印刷のヒント","tips.1":"印刷ダイアログでは、余白を「なし」、倍率を 100% にしてください。","tips.2":"「背景グラフィック」をオンにしないと、フチなし画像が白く残ることがあります。","tips.3":"画面と紙の色は完全には一致しません。ウェブページからはプリンターの色設定が読めないためです。","tips.4":"150 dpi を下回るとぼやけます。300 dpi 以上あれば十分です。","set.reset":"設定を初期値に戻す","preview.title":"印刷プレビュー","preview.empty":"画像を追加すると、ここに実際の印刷イメージが出ます。","status.images":"画像 {0}","status.perPage":"1ページ {0} 枚","status.pages":"ページ {0}","status.ready":"印刷できます","status.none":"先に画像を追加してください","toast.unsupported":"この形式はブラウザで開けません：{0}","toast.decode":"この画像は開けません：{0}","toast.read":"ファイルを読み取れません：{0}","toast.reset":"設定を初期値に戻しました。","footer.license":"オープンソース · MIT","footer.local":"完全ローカル・通信なし","a11y.lang":"表示言語","a11y.remove":"この画像を削除","a11y.moveUp":"上へ移動","a11y.moveDown":"下へ移動","a11y.print":"印刷する","a11y.settings":"印刷設定を開く"},"ko":{"app.title":"imgprint · 이미지 인쇄","app.tagline":"기기 안에서만 처리합니다","btn.settings":"인쇄 설정","btn.print":"인쇄","btn.close":"닫기","btn.pick":"이미지 선택","drop.title":"이미지를 여기에 끌어다 놓으세요","drop.sub":"클릭해서 골라도 됩니다. 여러 장 가능, Ctrl+V로 캡처도 붙여넣을 수 있어요.","drop.local":"이미지는 메모리에서만 처리하고 업로드하거나 저장하지 않습니다.","drop.formats":"JPG / PNG / WebP / AVIF / GIF","images.title":"이미지","images.limit":"이미지는 최대 {0}장까지 (나머지 {1}장은 추가하지 않았습니다)","badge.colorOkT":"sRGB로 인쇄합니다 (색 변환 없음)","badge.colorWarnT":"sRGB가 아닌 이미지입니다. 먼저 변환하지 않으면 인쇄 색이 달라질 수 있습니다.","badge.dpiT":"현재 용지와 배치 기준 예상 해상도","badge.dpi":"{0} dpi","badge.dpiLow":"{0} dpi · 조금 낮음","badge.dpiBad":"{0} dpi · 흐릿함","color.srgb":"sRGB","color.untagged":"ICC 없음 (sRGB로 간주)","color.icc":"ICC 프로파일","color.adobe":"AdobeRGB","color.p3":"Display P3","color.prophoto":"ProPhoto","color.cmyk":"CMYK","color.gray":"그레이스케일","color.hdr":"HDR","color.unknown":"색 공간 알 수 없음","alert.colorTitle":"sRGB가 아닌 이미지: {0}장","alert.colorBody":"imgprint는 브라우저에 보이는 픽셀을 그대로 인쇄하고 색을 변환하지 않습니다. 색을 정확히 원하면 먼저 이미지 프로그램에서 sRGB로 변환하세요.","alert.hdrTitle":"HDR 이미지가 있습니다","alert.hdrBody":"인쇄 결과는 SDR이라 HDR 이미지는 더 어둡거나 회색빛으로 보입니다.","set.title":"인쇄 설정","set.paper":"용지","paper.a4":"A4 · 210 × 297 mm","paper.a5":"A5 · 148 × 210 mm","paper.b5":"B5 · 176 × 250 mm","paper.letter":"Letter · 216 × 279 mm","paper.photo":"6인치 사진 · 102 × 152 mm","set.orient":"방향","orient.portrait":"세로","orient.landscape":"가로","set.margin":"여백","margin.none":"없음 (꽉 차게)","margin.narrow":"좁게 · 5 mm","margin.wide":"넓게 · 12 mm","set.perpage":"페이지당 장수","perpage.1":"1장","perpage.2":"2장","perpage.4":"4장","set.fit":"이미지 배치","fit.contain":"전체 보이기 (여백)","fit.cover":"페이지에 꽉 채우기 (잘림)","set.caption":"이미지 아래에 파일 이름 표시","set.watermark":"페이지 하단 홍보 문구","set.watermarkHint":"각 페이지 하단에 프로젝트 주소를 인쇄합니다. 종이에서는 링크를 누를 수 없어 주소를 그대로 인쇄합니다.","set.tips":"인쇄 팁","tips.1":"인쇄 대화상자에서 여백은 '없음', 배율은 100%로 두세요.","tips.2":"'배경 그래픽'을 켜지 않으면 꽉 채운 이미지가 흰색으로 남을 수 있습니다.","tips.3":"화면과 종이 색은 똑같지 않습니다. 웹 페이지는 프린터의 색 설정을 읽을 수 없기 때문입니다.","tips.4":"150 dpi보다 낮으면 눈에 띄게 흐릿합니다. 300 dpi 이상이면 충분합니다.","set.reset":"기본값으로 되돌리기","preview.title":"인쇄 미리보기","preview.empty":"이미지를 추가하면 실제 인쇄 결과가 여기에 나타납니다.","status.images":"이미지 {0}","status.perPage":"페이지당 {0}장","status.pages":"페이지 {0}","status.ready":"인쇄할 수 있습니다","status.none":"먼저 이미지를 추가하세요","toast.unsupported":"브라우저가 이 형식을 열 수 없습니다: {0}","toast.decode":"이 이미지를 열 수 없습니다: {0}","toast.read":"파일을 읽지 못했습니다: {0}","toast.reset":"기본값으로 되돌렸습니다.","footer.license":"오픈소스 · MIT","footer.local":"완전 로컬 · 네트워크 요청 없음","a11y.lang":"언어","a11y.remove":"이미지 삭제","a11y.moveUp":"위로 이동","a11y.moveDown":"아래로 이동","a11y.print":"인쇄하기","a11y.settings":"인쇄 설정 열기"},"de":{"app.title":"imgprint · Bilddruck","app.tagline":"Läuft nur auf diesem Gerät – nichts wird hochgeladen","btn.settings":"Druckeinstellungen","btn.print":"Drucken","btn.close":"Schließen","btn.pick":"Bilder auswählen","drop.title":"Bilder hierher ziehen","drop.sub":"Oder klicken zum Auswählen. Mehrere Dateien sind okay, Strg+V fügt Screenshots ein.","drop.local":"Nur im Arbeitsspeicher – kein Upload, keine Speicherung.","drop.formats":"JPG / PNG / WebP / AVIF / GIF","images.title":"Bilder","images.limit":"Höchstens {0} Bilder ({1} wurden nicht übernommen)","badge.colorOkT":"Wird als sRGB gedruckt – ohne Farbkonvertierung.","badge.colorWarnT":"Kein sRGB: Vor dem Drucken umwandeln, sonst weichen die Farben ab.","badge.dpiT":"Geschätzte Auflösung für dieses Papier und Layout.","badge.dpi":"{0} dpi","badge.dpiLow":"{0} dpi · etwas niedrig","badge.dpiBad":"{0} dpi · unscharf","color.srgb":"sRGB","color.untagged":"Kein Profil – als sRGB","color.icc":"ICC-Profil","color.adobe":"AdobeRGB","color.p3":"Display P3","color.prophoto":"ProPhoto","color.cmyk":"CMYK","color.gray":"Graustufen","color.hdr":"HDR","color.unknown":"Farbe unbekannt","alert.colorTitle":"Nicht-sRGB-Bilder: {0}","alert.colorBody":"imgprint druckt die Pixel, die der Browser zeigt, und konvertiert nichts. Für verlässliche Farben die Bilder vorher in sRGB umwandeln.","alert.hdrTitle":"HDR-Bilder dabei","alert.hdrBody":"Der Druck ist SDR – HDR-Bilder erscheinen dunkler oder grauer.","set.title":"Druckeinstellungen","set.paper":"Papier","paper.a4":"A4 · 210 × 297 mm","paper.a5":"A5 · 148 × 210 mm","paper.b5":"B5 · 176 × 250 mm","paper.letter":"Letter · 216 × 279 mm","paper.photo":"6-Zoll-Foto · 102 × 152 mm","set.orient":"Ausrichtung","orient.portrait":"Hochformat","orient.landscape":"Querformat","set.margin":"Rand","margin.none":"Ohne (randlos)","margin.narrow":"Schmal · 5 mm","margin.wide":"Breit · 12 mm","set.perpage":"Bilder pro Seite","perpage.1":"1 Bild","perpage.2":"2 Bilder","perpage.4":"4 Bilder","set.fit":"Bildanpassung","fit.contain":"Ganzes Bild, mit Rand","fit.cover":"Seite füllen, Ränder werden beschnitten","set.caption":"Dateiname unter dem Bild anzeigen","set.watermark":"Hinweiszeile in der Fußzeile","set.watermarkHint":"Druckt die Projekt-URLs unten auf jede Seite. Papier lässt sich nicht anklicken, deshalb stehen die Adressen ausgeschrieben.","set.tips":"Drucktipps","tips.1":"Im Druckdialog: Ränder auf „Keine“, Skalierung auf 100 % lassen.","tips.2":"„Hintergrundgrafiken“ einschalten, sonst können randlose Bilder weiß bleiben.","tips.3":"Bildschirm und Papier stimmen nie ganz überein – eine Webseite kennt das Farbprofil des Druckers nicht.","tips.4":"Unter 150 dpi wird es sichtbar unscharf; ab 300 dpi ist es gut.","set.reset":"Auf Standard zurücksetzen","preview.title":"Druckvorschau","preview.empty":"Sobald Bilder da sind, zeigt sich hier das echte Druckergebnis.","status.images":"Bilder {0}","status.perPage":"Pro Seite {0}","status.pages":"Seiten {0}","status.ready":"Bereit zum Drucken","status.none":"Zuerst Bilder hinzufügen","toast.unsupported":"Dieses Format kann der Browser nicht öffnen: {0}","toast.decode":"Bild lässt sich nicht öffnen: {0}","toast.read":"Datei ließ sich nicht lesen: {0}","toast.reset":"Einstellungen zurückgesetzt.","footer.license":"Open Source · MIT","footer.local":"Läuft komplett offline – keine Netzwerkanfragen","a11y.lang":"Sprache","a11y.remove":"Bild entfernen","a11y.moveUp":"Nach oben","a11y.moveDown":"Nach unten","a11y.print":"Drucken","a11y.settings":"Druckeinstellungen öffnen"},"fr":{"app.title":"imgprint · imprimante d'images","app.tagline":"Tout se passe sur votre appareil, rien n'est envoyé","btn.settings":"Réglages d'impression","btn.print":"Imprimer","btn.close":"Fermer","btn.pick":"Choisir des images","drop.title":"Déposez vos images ici","drop.sub":"Ou cliquez pour parcourir. Plusieurs fichiers d'un coup, et Ctrl+V colle une capture.","drop.local":"Uniquement en mémoire : rien n'est envoyé ni enregistré.","drop.formats":"JPG / PNG / WebP / AVIF / GIF","images.title":"Images","images.limit":"Maximum {0} images ({1} non ajoutées)","badge.colorOkT":"Imprimé en sRGB, sans conversion.","badge.colorWarnT":"Pas en sRGB : convertissez avant impression, sinon les couleurs dérivent.","badge.dpiT":"Résolution estimée pour ce papier et cette mise en page.","badge.dpi":"{0} dpi","badge.dpiLow":"{0} dpi · un peu faible","badge.dpiBad":"{0} dpi · flou","color.srgb":"sRGB","color.untagged":"Sans profil — supposé sRGB","color.icc":"Profil ICC","color.adobe":"AdobeRGB","color.p3":"Display P3","color.prophoto":"ProPhoto","color.cmyk":"CMYK","color.gray":"Niveaux de gris","color.hdr":"HDR","color.unknown":"Couleur inconnue","alert.colorTitle":"Images non sRGB : {0}","alert.colorBody":"imgprint imprime les pixels affichés par le navigateur, sans convertir les couleurs. Pour un rendu fidèle, convertissez ces images en sRGB au préalable.","alert.hdrTitle":"Images HDR présentes","alert.hdrBody":"L'impression est en SDR : les images HDR sortiront plus sombres ou grisées.","set.title":"Réglages d'impression","set.paper":"Papier","paper.a4":"A4 · 210 × 297 mm","paper.a5":"A5 · 148 × 210 mm","paper.b5":"B5 · 176 × 250 mm","paper.letter":"Letter · 216 × 279 mm","paper.photo":"Photo 6 pouces · 102 × 152 mm","set.orient":"Orientation","orient.portrait":"Portrait","orient.landscape":"Paysage","set.margin":"Marges","margin.none":"Aucune (pleine page)","margin.narrow":"Étroites · 5 mm","margin.wide":"Larges · 12 mm","set.perpage":"Images par page","perpage.1":"1 image","perpage.2":"2 images","perpage.4":"4 images","set.fit":"Remplissage","fit.contain":"Image entière, avec marges","fit.cover":"Remplir la page, bords rognés","set.caption":"Afficher le nom du fichier sous l'image","set.watermark":"Ligne de promo en pied de page","set.watermarkHint":"Ajoute l'adresse du projet au bas de chaque page. Le papier n'étant pas cliquable, les URL sont imprimées en clair.","set.tips":"Conseils d'impression","tips.1":"Dans la boîte d'impression : marges « Aucune », échelle à 100 %.","tips.2":"Activez « Graphiques d'arrière-plan », sinon les images pleine page peuvent rester blanches.","tips.3":"L'écran et le papier ne coïncident jamais : une page web ne connaît pas le profil de l'imprimante.","tips.4":"En dessous de 150 dpi, l'image devient floue ; 300 dpi suffisent.","set.reset":"Rétablir les réglages par défaut","preview.title":"Aperçu avant impression","preview.empty":"Ajoutez des images : voici le rendu réel à l'impression.","status.images":"Images {0}","status.perPage":"Par page {0}","status.pages":"Pages {0}","status.ready":"Prêt à imprimer","status.none":"Ajoutez d'abord des images","toast.unsupported":"Format non pris en charge par le navigateur : {0}","toast.decode":"Impossible d'ouvrir cette image : {0}","toast.read":"Lecture du fichier impossible : {0}","toast.reset":"Réglages rétablis.","footer.license":"Open source · MIT","footer.local":"100 % hors ligne — aucune requête réseau","a11y.lang":"Langue","a11y.remove":"Retirer cette image","a11y.moveUp":"Monter","a11y.moveDown":"Descendre","a11y.print":"Imprimer","a11y.settings":"Ouvrir les réglages d'impression"},"en":{"app.title":"imgprint · image printer","app.tagline":"Processed on your device, never uploaded","btn.settings":"Print settings","btn.print":"Print","btn.close":"Close","btn.pick":"Choose images","drop.title":"Drop images here","drop.sub":"Or click to choose. Multiple files are fine — Ctrl+V pastes a screenshot.","drop.local":"Kept in memory only — nothing is uploaded or saved.","drop.formats":"JPG / PNG / WebP / AVIF / GIF","images.title":"Images","images.limit":"Up to {0} images; {1} weren't added.","badge.colorOkT":"Printed as sRGB — no color conversion.","badge.colorWarnT":"Not sRGB — colors may shift; convert it to sRGB first.","badge.dpiT":"Estimated print resolution for this paper and layout.","badge.dpi":"{0} dpi","badge.dpiLow":"{0} dpi · a bit low","badge.dpiBad":"{0} dpi · blurry","color.srgb":"sRGB","color.untagged":"No profile — assumed sRGB","color.icc":"ICC profile","color.adobe":"AdobeRGB","color.p3":"Display P3","color.prophoto":"ProPhoto","color.cmyk":"CMYK","color.gray":"Grayscale","color.hdr":"HDR","color.unknown":"Color unknown","alert.colorTitle":"Non-sRGB images: {0}","alert.colorBody":"imgprint prints the pixels your browser shows and never converts color. For faithful color, convert these images to sRGB first.","alert.hdrTitle":"HDR images included","alert.hdrBody":"Print output is SDR, so HDR images will look darker or washed out.","set.title":"Print settings","set.paper":"Paper","paper.a4":"A4 · 210 × 297 mm","paper.a5":"A5 · 148 × 210 mm","paper.b5":"B5 · 176 × 250 mm","paper.letter":"Letter · 216 × 279 mm","paper.photo":"6-inch photo · 102 × 152 mm","set.orient":"Orientation","orient.portrait":"Portrait","orient.landscape":"Landscape","set.margin":"Margins","margin.none":"None (full bleed)","margin.narrow":"Narrow · 5 mm","margin.wide":"Wide · 12 mm","set.perpage":"Images per page","perpage.1":"1 image","perpage.2":"2 images","perpage.4":"4 images","set.fit":"How images fit","fit.contain":"Whole image, with white space","fit.cover":"Fill the page, cropping edges","set.caption":"Show file name under each image","set.watermark":"Promo line in the page footer","set.watermarkHint":"Adds the project URLs at the bottom of every page. Paper can't be clicked, so the addresses are printed out.","set.tips":"Printing tips","tips.1":"In the print dialog, set margins to “None” and keep the scale at 100%.","tips.2":"Turn on “Background graphics”, or full-bleed images may print with white gaps.","tips.3":"What you see won't match paper exactly — a web page can't read the printer's color profile.","tips.4":"Below 150 dpi images look visibly blurry; 300 dpi or more is plenty.","set.reset":"Reset to defaults","preview.title":"Print preview","preview.empty":"Add images and this becomes the actual printout.","status.images":"Images {0}","status.perPage":"Per page {0}","status.pages":"Pages {0}","status.ready":"Ready to print","status.none":"Add images first","toast.unsupported":"Your browser can't open this format: {0}","toast.decode":"Can't open this image: {0}","toast.read":"Couldn't read this file: {0}","toast.reset":"Settings reset.","footer.license":"Open source · MIT","footer.local":"Fully local — no network requests","a11y.lang":"Language","a11y.remove":"Remove this image","a11y.moveUp":"Move up","a11y.moveDown":"Move down","a11y.print":"Print","a11y.settings":"Open print settings"}};
+  var LANGS = ["zh-CN","zh-TW","ja","ko","de","fr","en"];
+  var NATIVE = {"zh-CN":"简体中文","zh-TW":"繁體中文","ja":"日本語","ko":"한국어","de":"Deutsch","fr":"Français","en":"English"};
+  var lang = 'zh-CN';
+  function setLang(l) { if (LANGS.indexOf(l) >= 0) lang = l; return lang; }
+  function t(key) {
+    var s = (PACKS[lang] && PACKS[lang][key]);
+    if (s === undefined) s = (PACKS['zh-CN'] && PACKS['zh-CN'][key]);
+    if (s === undefined) return String(key);
+    for (var i = 1; i < arguments.length; i++) s = s.split('{' + (i - 1) + '}').join(String(arguments[i]));
+    return s;
+  }
+  function has(key) { return !!(PACKS[lang] && PACKS[lang][key] !== undefined); }
+  return { packs: PACKS, langs: LANGS, native: NATIVE, setLang: setLang, t: t, has: has, get lang() { return lang; } };
+})();
+/*==I18N-END==*/
+
+/* ============================================================
+   core.js — 纯函数层：不碰 DOM，可被 Node 直接抽取执行（gate 单测）。
+   能力：图片元数据嗅探（ICC / EXIF ColorSpace / CMYK / HDR）、
+         纸张与排版几何、有效 DPI、分页、@page 规则、配置清洗。
+   说明：不做任何色彩转换（策略 A：sRGB 管线 + 检测提示）。
+   ============================================================ */
+/*==CORE-START==*/
+var CORE = (function () {
+  'use strict';
+
+  var PAPER_MM = { a4: [210, 297], a5: [148, 210], b5: [176, 250], letter: [215.9, 279.4], photo: [102, 152] };
+  var MARGIN_MM = { none: 0, narrow: 5, wide: 12 };
+  var WATERMARK_BAND_MM = 7;
+
+  /* ---------- byte helpers ---------- */
+  function be16(u, o) { return (u[o] << 8) | u[o + 1]; }
+  function be32(u, o) { return ((u[o] << 24) >>> 0) + ((u[o + 1] << 16) | (u[o + 2] << 8) | u[o + 3]); }
+  function le32(u, o) { return u[o] + (u[o + 1] << 8) + (u[o + 2] << 16) + (((u[o + 3] << 24) >>> 0)); }
+  function ascii(u, o, n) {
+    var s = '';
+    for (var i = 0; i < n; i++) s += String.fromCharCode(u[o + i] || 0);
+    return s;
+  }
+
+  /* ---------- ICC profile: header + desc tag (v2 'desc' and v4 'mluc') ---------- */
+  function parseIcc(u8) {
+    if (!u8 || u8.length < 132) return null;
+    if (ascii(u8, 36, 4) !== 'acsp') return null;
+    var out = { desc: '', dataSpace: ascii(u8, 16, 4).trim(), tagCount: 0 };
+    var n = be32(u8, 128);
+    if (n < 0 || n > 1000) return out;
+    for (var i = 0; i < n; i++) {
+      var e = 132 + i * 12;
+      if (e + 12 > u8.length) break;
+      var sig = ascii(u8, e, 4);
+      if (sig !== 'desc') continue;
+      var off = be32(u8, e + 4);
+      var size = be32(u8, e + 8);
+      out.tagCount++;
+      if (off + 8 > u8.length || size < 8) continue;
+      var type = ascii(u8, off, 4);
+      if (type === 'desc') {
+        var cnt = be32(u8, off + 8);
+        if (cnt > 0 && cnt < 2048 && off + 12 + cnt <= u8.length) {
+          out.desc = ascii(u8, off + 12, cnt).replace(/\0+$/, '');
+        }
+      } else if (type === 'mluc') {
+        var recs = be32(u8, off + 8);
+        var recSize = be32(u8, off + 12);
+        if (recs > 0 && recs < 64 && recSize >= 12) {
+          for (var r = 0; r < recs; r++) {
+            var rec = off + 16 + r * recSize;
+            if (rec + 12 > u8.length) break;
+            var len = be32(u8, rec + 4);
+            var roff = be32(u8, rec + 8);
+            var sOff = off + roff;
+            if (len > 0 && len < 2048 && (len % 2) === 0 && sOff + len <= u8.length) {
+              var s = '';
+              for (var k = 0; k < len; k += 2) s += String.fromCharCode((u8[sOff + k] << 8) | u8[sOff + k + 1]);
+              if (!out.desc) out.desc = s;
+            }
+          }
+        }
+      }
+    }
+    return out;
+  }
+
+  /* ---------- EXIF: ColorSpace (0xA001) + Orientation (0x0112) ---------- */
+  function parseExif(tiff, out) {
+    if (!tiff || tiff.length < 8 || !out) return;
+    var le = tiff[0] === 0x49 && tiff[1] === 0x49;
+    var be = tiff[0] === 0x4D && tiff[1] === 0x4D;
+    if (!le && !be) return;
+    var dv;
+    try { dv = new DataView(tiff.buffer, tiff.byteOffset, tiff.byteLength); } catch (e) { return; }
+    var ifd;
+    try { ifd = dv.getUint32(4, le); } catch (e) { return; }
+    if (ifd < 8 || ifd + 2 > tiff.length) return;
+    var n;
+    try { n = dv.getUint16(ifd, le); } catch (e) { return; }
+    if (n > 512) return;
+    for (var i = 0; i < n; i++) {
+      var e = ifd + 2 + i * 12;
+      if (e + 12 > tiff.length) break;
+      var tag, type;
+      try { tag = dv.getUint16(e, le); type = dv.getUint16(e + 2, le); } catch (err) { break; }
+      if (tag === 0xA001 || tag === 0x0112) {
+        var val = 0;
+        try {
+          if (type === 3) val = dv.getUint16(e + 8, le);
+          else if (type === 4) val = dv.getUint32(e + 8, le);
+          else continue;
+        } catch (err2) { continue; }
+        if (tag === 0xA001) out.exifColorSpace = val;
+        else out.orientation = val;
+      }
+    }
+  }
+
+  /* ---------- JPEG ---------- */
+  function readJpeg(u8) {
+    var out = { format: 'jpeg', icc: null, iccUnknown: false, components: 0, exifColorSpace: null, orientation: 0, adobe: false };
+    var i = 2;
+    var chunks = [];
+    var seenExif = false;
+    while (i + 3 < u8.length) {
+      if (u8[i] !== 0xFF) { i++; continue; }
+      var m = u8[i + 1];
+      if (m === 0xFF) { i++; continue; }
+      if (m === 0xD8 || m === 0x01 || (m >= 0xD0 && m <= 0xD7)) { i += 2; continue; }
+      if (m === 0xD9 || m === 0xDA) break; /* EOI / SOS: header metadata is done */
+      var len = be16(u8, i + 2);
+      if (len < 2) break;
+      var start = i + 4;
+      var end = i + 2 + len;
+      if (end > u8.length) end = u8.length;
+      if (m === 0xE2 && ascii(u8, start, 12) === 'ICC_PROFILE\0') {
+        chunks.push({ seq: u8[start + 12], data: u8.subarray(start + 14, end) });
+      } else if (m === 0xE1 && !seenExif && ascii(u8, start, 4) === 'Exif') {
+        seenExif = true;
+        parseExif(u8.subarray(start + 6, end), out);
+      } else if (m === 0xEE && ascii(u8, start, 5) === 'Adobe') {
+        out.adobe = true;
+        out.adobeTransform = u8[start + 11];
+      } else if (m >= 0xC0 && m <= 0xCF && m !== 0xC4 && m !== 0xC8 && m !== 0xCC) {
+        out.components = u8[start + 5];
+      }
+      i = end;
+    }
+    if (chunks.length) {
+      chunks.sort(function (a, b) { return a.seq - b.seq; });
+      var total = 0;
+      for (var c = 0; c < chunks.length; c++) total += chunks[c].data.length;
+      var prof = new Uint8Array(total);
+      var p = 0;
+      for (var c2 = 0; c2 < chunks.length; c2++) { prof.set(chunks[c2].data, p); p += chunks[c2].data.length; }
+      out.icc = parseIcc(prof);
+      out.iccUnknown = !out.icc;
+    }
+    return out;
+  }
+
+  /* ---------- zlib inflate (PNG iCCP) ---------- */
+  async function inflateZlib(u8) {
+    if (typeof DecompressionStream === 'undefined' || typeof Blob === 'undefined' || typeof Response === 'undefined') return null;
+    try {
+      var stream = new Blob([u8]).stream().pipeThrough(new DecompressionStream('deflate'));
+      var buf = await new Response(stream).arrayBuffer();
+      return new Uint8Array(buf);
+    } catch (e) { return null; }
+  }
+
+  /* ---------- PNG ---------- */
+  async function readPng(u8) {
+    var out = { format: 'png', icc: null, iccUnknown: false, components: 3, colorType: -1, spaceHint: null, hdr: false, gray: false };
+    var i = 8;
+    var iccp = null;
+    var prim = 0;
+    var trc = 0;
+    while (i + 8 <= u8.length) {
+      var len = be32(u8, i);
+      var type = ascii(u8, i + 4, 4);
+      var d = i + 8;
+      var e = d + len;
+      if (len > u8.length || e > u8.length) break;
+      if (type === 'IHDR') {
+        out.colorType = u8[d + 9];
+        out.gray = out.colorType === 0 || out.colorType === 4;
+      } else if (type === 'iCCP') {
+        iccp = u8.subarray(d, e);
+      } else if (type === 'sRGB') {
+        out.spaceHint = 'srgb';
+      } else if (type === 'cICP') {
+        prim = u8[d];
+        trc = u8[d + 1];
+        if (trc === 16 || trc === 18) out.hdr = true;
+      } else if (type === 'IEND') {
+        break;
+      }
+      i = e + 4;
+    }
+    if (iccp) {
+      var z = 0;
+      while (z < iccp.length && iccp[z] !== 0) z++;
+      if (z + 2 <= iccp.length && iccp[z + 1] === 0) {
+        var raw = await inflateZlib(iccp.subarray(z + 2));
+        if (raw) out.icc = parseIcc(raw);
+        out.iccUnknown = !out.icc;
+      }
+    }
+    if (out.hdr) out.spaceHint = 'hdr';
+    else if (prim === 12) out.spaceHint = 'p3';
+    else if (prim === 1 && !out.spaceHint) out.spaceHint = 'srgb';
+    return out;
+  }
+
+  /* ---------- WebP ---------- */
+  function readWebp(u8) {
+    var out = { format: 'webp', icc: null, iccUnknown: false, components: 3, spaceHint: null, hdr: false, exifColorSpace: null };
+    var i = 12;
+    while (i + 8 <= u8.length) {
+      var type = ascii(u8, i, 4);
+      var len = le32(u8, i + 4);
+      var d = i + 8;
+      var e = d + len;
+      if (e > u8.length) break;
+      if (type === 'ICCP') {
+        out.icc = parseIcc(u8.subarray(d, e));
+        out.iccUnknown = !out.icc;
+      } else if (type === 'EXIF') {
+        var t = u8.subarray(d, e);
+        if (ascii(t, 0, 4) === 'Exif') t = t.subarray(6);
+        parseExif(t, out);
+      }
+      i = e + (len & 1);
+    }
+    return out;
+  }
+
+  /* ---------- BMFF (AVIF / HEIC): colr box ---------- */
+  function readBmff(u8, format) {
+    var out = { format: format === 'heic' ? 'heic' : 'avif', icc: null, iccUnknown: false, components: 3, spaceHint: null, hdr: false };
+    for (var i = 8; i + 8 <= u8.length; i++) {
+      if (ascii(u8, i, 4) !== 'colr') continue;
+      var size = be32(u8, i - 4);
+      if (size < 8 || size > u8.length) continue;
+      var boxEnd = i - 4 + size;
+      if (boxEnd > u8.length) continue;
+      var t = ascii(u8, i + 4, 4);
+      if (t === 'nclx') {
+        var prim = be16(u8, i + 8);
+        var trc = be16(u8, i + 10);
+        if (trc === 16 || trc === 18) { out.hdr = true; out.spaceHint = 'hdr'; }
+        else if (prim === 12) out.spaceHint = 'p3';
+        else if (prim === 1) out.spaceHint = 'srgb';
+      } else if (t === 'rICC' || t === 'prof') {
+        out.icc = parseIcc(u8.subarray(i + 8, boxEnd));
+        out.iccUnknown = !out.icc;
+      }
+      if (out.icc || out.spaceHint) break;
+    }
+    return out;
+  }
+
+  /* ---------- format sniffing ---------- */
+  function sniff(u8) {
+    if (!u8 || u8.length < 12) return 'unknown';
+    if (u8[0] === 0xFF && u8[1] === 0xD8 && u8[2] === 0xFF) return 'jpeg';
+    if (u8[0] === 0x89 && ascii(u8, 1, 3) === 'PNG') return 'png';
+    if (ascii(u8, 0, 4) === 'RIFF' && ascii(u8, 8, 4) === 'WEBP') return 'webp';
+    if (ascii(u8, 0, 3) === 'GIF') return 'gif';
+    if (u8[0] === 0x42 && u8[1] === 0x4D) return 'bmp';
+    if (ascii(u8, 4, 4) === 'ftyp') {
+      var brand = ascii(u8, 8, 12);
+      if (brand.indexOf('avif') >= 0 || brand.indexOf('avis') >= 0) return 'avif';
+      if (brand.indexOf('heic') >= 0 || brand.indexOf('heix') >= 0 || brand.indexOf('heif') >= 0 || brand.indexOf('mif1') >= 0) return 'heic';
+    }
+    return 'unknown';
+  }
+
+  /* ---------- classify: what colour space are we actually printing? ---------- */
+  function classify(info) {
+    info = info || {};
+    var space = 'unknown';
+    var desc = info.icc && info.icc.desc ? String(info.icc.desc).trim() : '';
+    var dlow = desc.toLowerCase();
+    var dataSpace = info.icc && info.icc.dataSpace ? info.icc.dataSpace : '';
+    if (info.hdr) {
+      space = 'hdr';
+    } else if (info.format === 'jpeg' && info.components === 4) {
+      space = 'cmyk';
+    } else if (info.icc) {
+      if (/srgb|iec[ -]?61966/.test(dlow)) space = 'srgb';
+      else if (/adobe|a98/.test(dlow)) space = 'adobe';
+      else if (/display ?p3|\bp3\b/.test(dlow)) space = 'p3';
+      else if (/prophoto|romm/.test(dlow)) space = 'prophoto';
+      else if (dataSpace === 'CMYK') space = 'cmyk';
+      else if (/gray|grey/.test(dlow) || dataSpace === 'GRAY') space = 'gray';
+      else space = 'icc';
+    } else if (info.iccUnknown) {
+      space = 'icc';
+    } else if (info.exifColorSpace === 2) {
+      space = 'adobe';
+    } else if (info.exifColorSpace === 1) {
+      space = 'srgb';
+    } else if (info.spaceHint === 'hdr') {
+      space = 'hdr';
+    } else if (info.spaceHint === 'p3') {
+      space = 'p3';
+    } else if (info.spaceHint === 'srgb') {
+      space = 'srgb';
+    } else if (info.gray || (info.format === 'jpeg' && info.components === 1)) {
+      space = 'gray';
+    } else {
+      space = 'untagged';
+    }
+    return { format: info.format || 'unknown', space: space, desc: desc, hdr: !!info.hdr };
+  }
+
+  /* ---------- read metadata for one file ---------- */
+  async function readMeta(u8, mime) {
+    if (!u8 || !u8.length) return classify({ format: 'unknown' });
+    var fmt = sniff(u8);
+    if (fmt === 'unknown' && mime) {
+      var m = String(mime).toLowerCase();
+      if (m.indexOf('jpeg') >= 0 || m.indexOf('jpg') >= 0) fmt = 'jpeg';
+      else if (m.indexOf('png') >= 0) fmt = 'png';
+      else if (m.indexOf('webp') >= 0) fmt = 'webp';
+      else if (m.indexOf('gif') >= 0) fmt = 'gif';
+      else if (m.indexOf('bmp') >= 0) fmt = 'bmp';
+      else if (m.indexOf('avif') >= 0) fmt = 'avif';
+      else if (m.indexOf('hei') >= 0) fmt = 'heic';
+    }
+    var info = { format: fmt, icc: null, iccUnknown: false, components: 0, spaceHint: null, hdr: false };
+    try {
+      if (fmt === 'jpeg') info = readJpeg(u8);
+      else if (fmt === 'png') info = await readPng(u8);
+      else if (fmt === 'webp') info = readWebp(u8);
+      else if (fmt === 'avif' || fmt === 'heic') info = readBmff(u8, fmt);
+      else if (fmt === 'gif' || fmt === 'bmp') info = { format: fmt, icc: null, components: 3, spaceHint: null, hdr: false };
+    } catch (e) {
+      info = { format: fmt, icc: null, iccUnknown: false, components: 0, spaceHint: null, hdr: false, parseError: true };
+    }
+    info.format = info.format || fmt;
+    return classify(info);
+  }
+
+  /* ---------- paper & layout geometry (mm) ---------- */
+  function paperSize(paper, orient) {
+    var p = PAPER_MM[paper] || PAPER_MM.a4;
+    return orient === 'l' ? { w: p[1], h: p[0] } : { w: p[0], h: p[1] };
+  }
+
+  function layoutFor(cfg) {
+    var size = paperSize(cfg.paper, cfg.orient);
+    var margin = MARGIN_MM[cfg.margin];
+    if (margin == null) margin = 0;
+    var per = (cfg.perpage === 2 || cfg.perpage === 4) ? cfg.perpage : 1;
+    var cols = 1, rows = 1;
+    if (per === 2) {
+      if (cfg.orient === 'l') { cols = 2; rows = 1; } else { cols = 1; rows = 2; }
+    } else if (per === 4) { cols = 2; rows = 2; }
+    var gap = per > 1 ? 4 : 0;
+    var wmBand = cfg.watermark ? WATERMARK_BAND_MM : 0;
+    var innerW = size.w - margin * 2;
+    var innerH = size.h - margin * 2 - wmBand;
+    var slotW = (innerW - gap * (cols - 1)) / cols;
+    var slotH = (innerH - gap * (rows - 1)) / rows;
+    return {
+      pageW: size.w, pageH: size.h,
+      margin: margin, cols: cols, rows: rows, gap: gap,
+      slotW: slotW, slotH: slotH, innerW: innerW, innerH: innerH,
+      wmBand: wmBand, per: per
+    };
+  }
+
+  function dpiFor(imgW, imgH, slotW, slotH, fit) {
+    if (!(imgW > 0) || !(imgH > 0) || !(slotW > 0) || !(slotH > 0)) return 0;
+    var s = fit === 'cover' ? Math.max(slotW / imgW, slotH / imgH) : Math.min(slotW / imgW, slotH / imgH);
+    if (!(s > 0)) return 0;
+    return 25.4 / s;
+  }
+
+  function paginate(n, per) {
+    var size = (per === 2 || per === 4) ? per : 1;
+    var pages = [];
+    for (var i = 0; i < n; i += size) {
+      var page = [];
+      for (var k = 0; k < size && i + k < n; k++) page.push(i + k);
+      pages.push(page);
+    }
+    return pages;
+  }
+
+  function mm(v) {
+    var r = Math.round(v * 100) / 100;
+    return String(r);
+  }
+
+  function pageCss(cfg) {
+    var size = paperSize(cfg.paper, cfg.orient);
+    return '@page{size:' + mm(size.w) + 'mm ' + mm(size.h) + 'mm;margin:0}';
+  }
+
+  /* ---------- config ---------- */
+  function defaults() {
+    return { lang: '', paper: 'a4', orient: 'p', margin: 'none', perpage: 1, fit: 'contain', caption: false, watermark: true };
+  }
+
+  function sanitizeCfg(raw) {
+    var c = defaults();
+    if (raw && typeof raw === 'object') {
+      if (typeof raw.lang === 'string') c.lang = raw.lang;
+      if (PAPER_MM[raw.paper]) c.paper = raw.paper;
+      if (raw.orient === 'p' || raw.orient === 'l') c.orient = raw.orient;
+      if (MARGIN_MM[raw.margin] != null) c.margin = raw.margin;
+      if (raw.perpage === 1 || raw.perpage === 2 || raw.perpage === 4) c.perpage = raw.perpage;
+      if (raw.fit === 'contain' || raw.fit === 'cover') c.fit = raw.fit;
+      if (typeof raw.caption === 'boolean') c.caption = raw.caption;
+      if (typeof raw.watermark === 'boolean') c.watermark = raw.watermark;
+    }
+    return c;
+  }
+
+  function formatBytes(n) {
+    if (!(n >= 0)) return '';
+    if (n < 1024) return n + ' B';
+    if (n < 1024 * 1024) return (n / 1024).toFixed(0) + ' KB';
+    return (n / (1024 * 1024)).toFixed(1) + ' MB';
+  }
+
+  return {
+    PAPER_MM: PAPER_MM,
+    MARGIN_MM: MARGIN_MM,
+    WATERMARK_BAND_MM: WATERMARK_BAND_MM,
+    parseIcc: parseIcc,
+    parseExif: parseExif,
+    readJpeg: readJpeg,
+    readPng: readPng,
+    readWebp: readWebp,
+    readBmff: readBmff,
+    sniff: sniff,
+    classify: classify,
+    readMeta: readMeta,
+    paperSize: paperSize,
+    layoutFor: layoutFor,
+    dpiFor: dpiFor,
+    paginate: paginate,
+    pageCss: pageCss,
+    defaults: defaults,
+    sanitizeCfg: sanitizeCfg,
+    formatBytes: formatBytes
+  };
+})();
+/*==CORE-END==*/
+
+/* ============================================================
+   app.js — DOM 层：导入、列表、预览、设置、打印、i18n。
+   所有可见文案都走 I18N.t()，本文件不写死任何自然语言字符串。
+   ============================================================ */
+var APP = (function () {
+  'use strict';
+
+  var SITE_TEXT = 'imgprint.xszx.cc.cd';
+  var REPO_TEXT = 'github.com/w32394045-dotcom/imgprint';
+  var SITE_HREF = 'https://' + SITE_TEXT + '/';
+  var REPO_HREF = 'https://' + REPO_TEXT;
+  var CFG_KEY = 'imgprint.cfg.v1';
+  var MAX_IMAGES = 60;
+  var MM_PX = 96 / 25.4;
+  var SVG_NS = 'http://www.w3.org/2000/svg';
+
+  var COLOR_META = {
+    srgb: { key: 'color.srgb', cls: 'ok', tip: 'badge.colorOkT', warn: false },
+    untagged: { key: 'color.untagged', cls: '', tip: 'badge.colorOkT', warn: false },
+    gray: { key: 'color.gray', cls: 'ok', tip: 'badge.colorOkT', warn: false },
+    icc: { key: 'color.icc', cls: '', tip: 'badge.colorOkT', warn: false },
+    adobe: { key: 'color.adobe', cls: 'warn', tip: 'badge.colorWarnT', warn: true },
+    p3: { key: 'color.p3', cls: 'warn', tip: 'badge.colorWarnT', warn: true },
+    prophoto: { key: 'color.prophoto', cls: 'warn', tip: 'badge.colorWarnT', warn: true },
+    cmyk: { key: 'color.cmyk', cls: 'warn', tip: 'badge.colorWarnT', warn: true },
+    hdr: { key: 'color.hdr', cls: 'warn', tip: 'badge.colorWarnT', warn: false },
+    unknown: { key: 'color.unknown', cls: '', tip: 'badge.colorWarnT', warn: false }
+  };
+  var WARN_SPACES = { adobe: 1, p3: 1, prophoto: 1, cmyk: 1 };
+
+  var state = {
+    cfg: CORE.defaults(),
+    images: [],
+    seq: 0,
+    dismissed: { color: false, hdr: false },
+    toastTimer: 0,
+    renderQueued: false
+  };
+
+  var el = {};
+  var pageStyle = null;
+
+  /* ---------------- small helpers ---------------- */
+  function $(id) { return document.getElementById(id); }
+
+  function t() {
+    return I18N.t.apply(null, arguments);
+  }
+
+  function clear(node) {
+    while (node.firstChild) node.removeChild(node.firstChild);
+  }
+
+  function icon(id) {
+    var svg = document.createElementNS(SVG_NS, 'svg');
+    svg.setAttribute('class', 'ico');
+    svg.setAttribute('aria-hidden', 'true');
+    svg.setAttribute('focusable', 'false');
+    var use = document.createElementNS(SVG_NS, 'use');
+    use.setAttribute('href', '#' + id);
+    svg.appendChild(use);
+    return svg;
+  }
+
+  function chip(text, cls, tip) {
+    var s = document.createElement('span');
+    s.className = 'chip' + (cls ? ' ' + cls : '');
+    s.textContent = text;
+    if (tip) s.title = tip;
+    return s;
+  }
+
+  function toast(msg) {
+    el.toast.textContent = msg;
+    el.toast.hidden = false;
+    if (state.toastTimer) clearTimeout(state.toastTimer);
+    state.toastTimer = setTimeout(function () {
+      el.toast.hidden = true;
+      state.toastTimer = 0;
+    }, 3600);
+  }
+
+  /* ---------------- config ---------------- */
+  function readCfg() {
+    try {
+      var raw = localStorage.getItem(CFG_KEY);
+      if (!raw) return null;
+      return JSON.parse(raw);
+    } catch (e) { return null; }
+  }
+
+  function writeCfg() {
+    try { localStorage.setItem(CFG_KEY, JSON.stringify(state.cfg)); } catch (e) { /* storage may be blocked */ }
+  }
+
+  function detectLang() {
+    var list = (navigator.languages && navigator.languages.length) ? navigator.languages : [navigator.language || 'en'];
+    for (var i = 0; i < list.length; i++) {
+      var v = String(list[i] || '').toLowerCase();
+      if (v.indexOf('zh') === 0) return /hant|tw|hk|mo/.test(v) ? 'zh-TW' : 'zh-CN';
+      if (v.indexOf('ja') === 0) return 'ja';
+      if (v.indexOf('ko') === 0) return 'ko';
+      if (v.indexOf('de') === 0) return 'de';
+      if (v.indexOf('fr') === 0) return 'fr';
+      if (v.indexOf('en') === 0) return 'en';
+    }
+    return 'en';
+  }
+
+  /* ---------------- i18n application ---------------- */
+  function applyI18n() {
+    var lang = I18N.lang;
+    document.documentElement.setAttribute('lang', lang);
+    document.title = t('app.title');
+    el.langSel.setAttribute('aria-label', t('a11y.lang'));
+
+    var nodes = document.querySelectorAll('[data-i18n]');
+    for (var i = 0; i < nodes.length; i++) {
+      var node = nodes[i];
+      var key = node.getAttribute('data-i18n');
+      var text = t(key);
+      if (node.textContent !== text) node.textContent = text;
+    }
+    var titles = document.querySelectorAll('[data-i18n-title]');
+    for (var j = 0; j < titles.length; j++) {
+      titles[j].setAttribute('title', t(titles[j].getAttribute('data-i18n-title')));
+    }
+    var arias = document.querySelectorAll('[data-i18n-aria]');
+    for (var k = 0; k < arias.length; k++) {
+      arias[k].setAttribute('aria-label', t(arias[k].getAttribute('data-i18n-aria')));
+    }
+    el.langSel.value = lang;
+  }
+
+  function setLang(lang) {
+    if (I18N.langs.indexOf(lang) < 0) return;
+    I18N.setLang(lang);
+    state.cfg.lang = lang;
+    writeCfg();
+    applyI18n();
+    renderAll();
+  }
+
+  /* ---------------- form <-> cfg ---------------- */
+  function syncForm() {
+    var c = state.cfg;
+    el.optPaper.value = c.paper;
+    el.optOrient.value = c.orient;
+    el.optMargin.value = c.margin;
+    el.optPerPage.value = String(c.perpage);
+    el.optFit.value = c.fit;
+    el.optCaption.checked = !!c.caption;
+    el.optWatermark.checked = !!c.watermark;
+  }
+
+  function readForm() {
+    state.cfg = CORE.sanitizeCfg({
+      lang: state.cfg.lang,
+      paper: el.optPaper.value,
+      orient: el.optOrient.value,
+      margin: el.optMargin.value,
+      perpage: parseInt(el.optPerPage.value, 10),
+      fit: el.optFit.value,
+      caption: el.optCaption.checked,
+      watermark: el.optWatermark.checked
+    });
+    writeCfg();
+    updatePageStyle();
+    renderAll();
+  }
+
+  function updatePageStyle() {
+    if (!pageStyle) {
+      pageStyle = document.createElement('style');
+      pageStyle.id = 'pageStyle';
+      document.head.appendChild(pageStyle);
+    }
+    pageStyle.textContent = CORE.pageCss(state.cfg);
+  }
+
+  /* ---------------- images ---------------- */
+  function makeRec(file) {
+    state.seq += 1;
+    return {
+      id: 'im' + state.seq,
+      name: file.name || ('image-' + state.seq),
+      size: file.size || 0,
+      url: URL.createObjectURL(file),
+      w: 0,
+      h: 0,
+      meta: null
+    };
+  }
+
+  function loadMeta(rec, file) {
+    (async function () {
+      try {
+        var buf = await file.arrayBuffer();
+        var meta = await CORE.readMeta(new Uint8Array(buf), file.type || '');
+        rec.meta = meta;
+      } catch (e) {
+        rec.meta = { format: 'unknown', space: 'unknown', desc: '', hdr: false };
+        toast(t('toast.read', rec.name));
+      }
+      scheduleRender();
+      var probe = new Image();
+      probe.onload = function () {
+        rec.w = probe.naturalWidth;
+        rec.h = probe.naturalHeight;
+        scheduleRender();
+      };
+      probe.onerror = function () {
+        removeImage(rec.id);
+        toast(t('toast.decode', rec.name));
+      };
+      probe.src = rec.url;
+    })();
+  }
+
+  function addFiles(fileList) {
+    var files = Array.prototype.slice.call(fileList || []);
+    if (!files.length) return;
+    var skipped = 0;
+    var named = 0;
+    for (var i = 0; i < files.length; i++) {
+      var f = files[i];
+      var looksImage = /^image\//.test(f.type || '') || /\.(jpe?g|png|webp|avif|heic|heif|gif|bmp)$/i.test(f.name || '');
+      if (!looksImage) {
+        if (named === 0) toast(t('toast.unsupported', f.name || ''));
+        named += 1;
+        continue;
+      }
+      if (state.images.length >= MAX_IMAGES) { skipped += 1; continue; }
+      var rec = makeRec(f);
+      state.images.push(rec);
+      loadMeta(rec, f);
+    }
+    if (skipped) toast(t('images.limit', MAX_IMAGES, skipped));
+    if (state.images.length) renderAll();
+  }
+
+  function indexOfId(id) {
+    for (var i = 0; i < state.images.length; i++) if (state.images[i].id === id) return i;
+    return -1;
+  }
+
+  function removeImage(id) {
+    var i = indexOfId(id);
+    if (i < 0) return;
+    var rec = state.images.splice(i, 1)[0];
+    try { URL.revokeObjectURL(rec.url); } catch (e) { /* ignore */ }
+    renderAll();
+  }
+
+  function moveImage(id, delta) {
+    var i = indexOfId(id);
+    var j = i + delta;
+    if (i < 0 || j < 0 || j >= state.images.length) return;
+    var tmp = state.images[i];
+    state.images[i] = state.images[j];
+    state.images[j] = tmp;
+    renderAll();
+  }
+
+  /* ---------------- rendering ---------------- */
+  function scheduleRender() {
+    if (state.renderQueued) return;
+    state.renderQueued = true;
+    var raf = window.requestAnimationFrame || function (fn) { return setTimeout(fn, 16); };
+    raf(function () {
+      state.renderQueued = false;
+      renderAll();
+    });
+  }
+
+  function colorChip(im) {
+    if (!im.meta) return chip('…', 'muted', '');
+    var def = COLOR_META[im.meta.space] || COLOR_META.unknown;
+    return chip(t(def.key), def.cls, t(def.tip));
+  }
+
+  function dpiChip(im, lay) {
+    var d = CORE.dpiFor(im.w, im.h, lay.slotW, lay.slotH, state.cfg.fit);
+    if (!(d > 0)) return chip('…', 'muted', t('badge.dpiT'));
+    var n = Math.round(d);
+    var cls = '', key = 'badge.dpi';
+    if (d >= 300) cls = 'ok';
+    else if (d < 150) { cls = 'warn'; key = 'badge.dpiBad'; }
+    else key = 'badge.dpiLow';
+    return chip(t(key, n), cls, t('badge.dpiT'));
+  }
+
+  function actionButton(act, iconId, label, disabled) {
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'mini';
+    b.setAttribute('data-act', act);
+    b.setAttribute('aria-label', label);
+    b.setAttribute('title', label);
+    if (disabled) b.disabled = true;
+    b.appendChild(icon(iconId));
+    return b;
+  }
+
+  function renderList() {
+    var list = el.imgList;
+    clear(list);
+    var n = state.images.length;
+    el.imgCount.hidden = n === 0;
+    el.imgCount.textContent = String(n);
+    el.dropzone.classList.toggle('big', n === 0);
+    if (!n) {
+      list.hidden = true;
+      return;
+    }
+    list.hidden = false;
+    var lay = CORE.layoutFor(state.cfg);
+    for (var i = 0; i < n; i++) {
+      var im = state.images[i];
+      var li = document.createElement('li');
+      li.className = 'card';
+      li.setAttribute('data-id', im.id);
+      li.setAttribute('data-index', String(i + 1));
+
+      var thumb = document.createElement('div');
+      thumb.className = 'thumb';
+      var timg = document.createElement('img');
+      timg.src = im.url;
+      timg.alt = '';
+      timg.loading = 'lazy';
+      thumb.appendChild(timg);
+
+      var body = document.createElement('div');
+      body.className = 'card-body';
+      var name = document.createElement('div');
+      name.className = 'name';
+      name.textContent = im.name;
+      name.title = im.name;
+      var sub = document.createElement('div');
+      sub.className = 'sub';
+      sub.textContent = (im.w && im.h ? im.w + ' × ' + im.h + ' · ' : '') + CORE.formatBytes(im.size);
+      var chips = document.createElement('div');
+      chips.className = 'chips';
+      chips.appendChild(colorChip(im));
+      chips.appendChild(dpiChip(im, lay));
+      body.appendChild(name);
+      body.appendChild(sub);
+      body.appendChild(chips);
+
+      var actions = document.createElement('div');
+      actions.className = 'actions';
+      actions.appendChild(actionButton('up', 'i-up', t('a11y.moveUp'), i === 0));
+      actions.appendChild(actionButton('down', 'i-down', t('a11y.moveDown'), i === n - 1));
+      actions.appendChild(actionButton('remove', 'i-trash', t('a11y.remove'), false));
+
+      li.appendChild(thumb);
+      li.appendChild(body);
+      li.appendChild(actions);
+      list.appendChild(li);
+    }
+  }
+
+  function watermark() {
+    var wm = document.createElement('div');
+    wm.className = 'wm';
+    var site = document.createElement('a');
+    site.className = 'site';
+    site.href = SITE_HREF;
+    site.target = '_blank';
+    site.rel = 'noopener noreferrer';
+    site.textContent = SITE_TEXT;
+    var sep = document.createElement('span');
+    sep.className = 'sep';
+    sep.setAttribute('aria-hidden', 'true');
+    sep.textContent = '·';
+    var repo = document.createElement('a');
+    repo.href = REPO_HREF;
+    repo.target = '_blank';
+    repo.rel = 'noopener noreferrer';
+    repo.textContent = REPO_TEXT;
+    wm.appendChild(site);
+    wm.appendChild(sep);
+    wm.appendChild(repo);
+    return wm;
+  }
+
+  function buildSheet(lay, indexes) {
+    var wrap = document.createElement('div');
+    wrap.className = 'sheet-wrap';
+    var sheet = document.createElement('div');
+    sheet.className = 'sheet';
+    sheet.style.setProperty('--pw', lay.pageW + 'mm');
+    sheet.style.setProperty('--ph', lay.pageH + 'mm');
+    sheet.style.setProperty('--mg', lay.margin + 'mm');
+    sheet.style.setProperty('--gap', lay.gap + 'mm');
+    sheet.style.setProperty('--cols', String(lay.cols));
+    sheet.style.setProperty('--rows', String(lay.rows));
+
+    var inner = document.createElement('div');
+    inner.className = 'sheet-inner';
+    for (var i = 0; i < indexes.length; i++) {
+      var im = state.images[indexes[i]];
+      var slot = document.createElement('div');
+      slot.className = 'slot';
+      var box = document.createElement('div');
+      box.className = 'imgbox';
+      var img = document.createElement('img');
+      img.src = im.url;
+      img.alt = '';
+      if (state.cfg.fit === 'cover') img.className = 'cover';
+      box.appendChild(img);
+      slot.appendChild(box);
+      if (state.cfg.caption) {
+        var cap = document.createElement('div');
+        cap.className = 'cap';
+        cap.textContent = im.name;
+        slot.appendChild(cap);
+      }
+      inner.appendChild(slot);
+    }
+    sheet.appendChild(inner);
+    if (state.cfg.watermark) sheet.appendChild(watermark());
+    wrap.appendChild(sheet);
+    return wrap;
+  }
+
+  function renderSheets() {
+    var host = el.sheets;
+    clear(host);
+    var n = state.images.length;
+    el.previewEmpty.hidden = n > 0;
+    if (!n) {
+      host.hidden = true;
+      return;
+    }
+    host.hidden = false;
+    var lay = CORE.layoutFor(state.cfg);
+    var pages = CORE.paginate(n, lay.per);
+    for (var p = 0; p < pages.length; p++) host.appendChild(buildSheet(lay, pages[p]));
+  }
+
+  function renderStatus() {
+    var host = el.status;
+    clear(host);
+    var n = state.images.length;
+    if (!n) {
+      var none = document.createElement('span');
+      none.textContent = t('status.none');
+      host.appendChild(none);
+      return;
+    }
+    var lay = CORE.layoutFor(state.cfg);
+    var pages = CORE.paginate(n, lay.per).length;
+    var parts = [t('status.images', n), t('status.perPage', lay.per), t('status.pages', pages)];
+    for (var i = 0; i < parts.length; i++) {
+      if (i) {
+        var sep = document.createElement('span');
+        sep.className = 'sep';
+        sep.setAttribute('aria-hidden', 'true');
+        host.appendChild(sep);
+      }
+      var s = document.createElement('span');
+      s.textContent = parts[i];
+      host.appendChild(s);
+    }
+    var dot = document.createElement('span');
+    dot.className = 'sep';
+    dot.setAttribute('aria-hidden', 'true');
+    host.appendChild(dot);
+    var ready = document.createElement('span');
+    ready.className = 'ready';
+    ready.textContent = t('status.ready');
+    host.appendChild(ready);
+  }
+
+  function alertBox(title, body, kind) {
+    var box = document.createElement('div');
+    box.className = 'alert';
+    box.setAttribute('role', 'status');
+    var mark = document.createElement('span');
+    mark.className = 'alert-ico';
+    mark.setAttribute('aria-hidden', 'true');
+    mark.textContent = '!';
+    var txt = document.createElement('div');
+    var b = document.createElement('b');
+    b.textContent = title;
+    var p = document.createElement('p');
+    p.textContent = body;
+    txt.appendChild(b);
+    txt.appendChild(p);
+    var close = document.createElement('button');
+    close.type = 'button';
+    close.className = 'mini';
+    close.setAttribute('aria-label', t('btn.close'));
+    close.setAttribute('title', t('btn.close'));
+    close.appendChild(icon('i-close'));
+    close.addEventListener('click', function () {
+      state.dismissed[kind] = true;
+      renderAlerts();
+    });
+    box.appendChild(mark);
+    box.appendChild(txt);
+    box.appendChild(close);
+    return box;
+  }
+
+  function renderAlerts() {
+    var host = el.alerts;
+    clear(host);
+    var warn = 0;
+    var hdr = 0;
+    for (var i = 0; i < state.images.length; i++) {
+      var m = state.images[i].meta;
+      if (!m) continue;
+      if (m.space === 'hdr') hdr += 1;
+      else if (WARN_SPACES[m.space]) warn += 1;
+    }
+    var items = [];
+    if (warn && !state.dismissed.color) items.push(['alert.colorTitle', warn, 'alert.colorBody', 'color']);
+    if (hdr && !state.dismissed.hdr) items.push(['alert.hdrTitle', 0, 'alert.hdrBody', 'hdr']);
+    for (var k = 0; k < items.length; k++) {
+      var it = items[k];
+      var title = it[1] ? t(it[0], it[1]) : t(it[0]);
+      host.appendChild(alertBox(title, t(it[2]), it[3]));
+    }
+    host.hidden = items.length === 0;
+  }
+
+  function fitSheets() {
+    var wraps = el.sheets.children;
+    if (!wraps.length) return;
+    var lay = CORE.layoutFor(state.cfg);
+    var avail = el.sheets.clientWidth;
+    if (!(avail > 0)) return;
+    var pxW = lay.pageW * MM_PX;
+    var pxH = lay.pageH * MM_PX;
+    var k = Math.min(1, (avail - 6) / pxW);
+    if (!(k > 0.05)) k = 0.05;
+    for (var i = 0; i < wraps.length; i++) {
+      wraps[i].style.width = pxW * k + 'px';
+      wraps[i].style.height = pxH * k + 'px';
+      if (wraps[i].firstChild) wraps[i].firstChild.style.transform = 'scale(' + k + ')';
+    }
+  }
+
+  function renderAll() {
+    renderList();
+    renderSheets();
+    renderStatus();
+    renderAlerts();
+    fitSheets();
+    el.btnPrint.disabled = state.images.length === 0;
+  }
+
+  /* ---------------- drawer ---------------- */
+  function openDrawer() {
+    el.scrim.hidden = false;
+    el.drawer.classList.add('open');
+    el.drawer.setAttribute('aria-hidden', 'false');
+    el.btnSettings.setAttribute('aria-expanded', 'true');
+    el.btnClose.focus();
+  }
+
+  function closeDrawer() {
+    if (!el.drawer.classList.contains('open')) return;
+    el.drawer.classList.remove('open');
+    el.drawer.setAttribute('aria-hidden', 'true');
+    el.scrim.hidden = true;
+    el.btnSettings.setAttribute('aria-expanded', 'false');
+    el.btnSettings.focus();
+  }
+
+  /* ---------------- boot ---------------- */
+  function cache() {
+    el.dropzone = $('dropzone');
+    el.imgList = $('imgList');
+    el.imgCount = $('imgCount');
+    el.status = $('status');
+    el.alerts = $('alerts');
+    el.sheets = $('sheets');
+    el.previewEmpty = $('previewEmpty');
+    el.toast = $('toast');
+    el.fileInput = $('fileInput');
+    el.langSel = $('langSel');
+    el.btnSettings = $('btnSettings');
+    el.btnPrint = $('btnPrint');
+    el.btnClose = $('btnClose');
+    el.btnReset = $('btnReset');
+    el.drawer = $('settings');
+    el.scrim = $('scrim');
+    el.optPaper = $('optPaper');
+    el.optOrient = $('optOrient');
+    el.optMargin = $('optMargin');
+    el.optPerPage = $('optPerPage');
+    el.optFit = $('optFit');
+    el.optCaption = $('optCaption');
+    el.optWatermark = $('optWatermark');
+  }
+
+  function buildLangSelect() {
+    for (var i = 0; i < I18N.langs.length; i++) {
+      var code = I18N.langs[i];
+      var opt = document.createElement('option');
+      opt.value = code;
+      opt.textContent = I18N.native[code] || code;
+      el.langSel.appendChild(opt);
+    }
+    el.langSel.value = I18N.lang;
+  }
+
+  function pickFiles() {
+    el.fileInput.value = '';
+    el.fileInput.click();
+  }
+
+  function bind() {
+    el.dropzone.addEventListener('click', pickFiles);
+    el.dropzone.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pickFiles(); }
+    });
+    el.fileInput.addEventListener('change', function () {
+      addFiles(el.fileInput.files);
+      el.fileInput.value = '';
+    });
+
+    var dragDepth = 0;
+    function setDrag(on) {
+      el.dropzone.classList.toggle('drag', !!on);
+    }
+    document.addEventListener('dragenter', function (e) {
+      e.preventDefault();
+      dragDepth += 1;
+      setDrag(true);
+    });
+    document.addEventListener('dragover', function (e) { e.preventDefault(); });
+    document.addEventListener('dragleave', function (e) {
+      e.preventDefault();
+      dragDepth -= 1;
+      if (dragDepth <= 0) { dragDepth = 0; setDrag(false); }
+    });
+    document.addEventListener('drop', function (e) {
+      e.preventDefault();
+      dragDepth = 0;
+      setDrag(false);
+      if (e.dataTransfer) addFiles(e.dataTransfer.files);
+    });
+    document.addEventListener('paste', function (e) {
+      if (!e.clipboardData) return;
+      var items = e.clipboardData.items || [];
+      var files = [];
+      for (var i = 0; i < items.length; i++) {
+        if (items[i].kind === 'file') {
+          var f = items[i].getAsFile();
+          if (f) files.push(f);
+        }
+      }
+      if (files.length) {
+        e.preventDefault();
+        addFiles(files);
+      }
+    });
+
+    el.imgList.addEventListener('click', function (e) {
+      var btn = e.target && e.target.closest ? e.target.closest('[data-act]') : null;
+      if (!btn) return;
+      var card = btn.closest('.card');
+      if (!card) return;
+      var id = card.getAttribute('data-id');
+      var act = btn.getAttribute('data-act');
+      if (act === 'up') moveImage(id, -1);
+      else if (act === 'down') moveImage(id, 1);
+      else if (act === 'remove') removeImage(id);
+    });
+
+    el.btnSettings.addEventListener('click', openDrawer);
+    el.btnClose.addEventListener('click', closeDrawer);
+    el.scrim.addEventListener('click', closeDrawer);
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape') closeDrawer();
+    });
+
+    el.btnPrint.addEventListener('click', function () {
+      closeDrawer();
+      window.print();
+    });
+
+    el.langSel.addEventListener('change', function () { setLang(el.langSel.value); });
+
+    var fields = [el.optPaper, el.optOrient, el.optMargin, el.optPerPage, el.optFit, el.optCaption, el.optWatermark];
+    for (var i = 0; i < fields.length; i++) fields[i].addEventListener('change', readForm);
+
+    el.btnReset.addEventListener('click', function () {
+      var lang = state.cfg.lang;
+      state.cfg = CORE.defaults();
+      state.cfg.lang = lang;
+      writeCfg();
+      syncForm();
+      updatePageStyle();
+      renderAll();
+      toast(t('toast.reset'));
+    });
+
+    var resizeTimer = 0;
+    window.addEventListener('resize', function () {
+      if (resizeTimer) clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(function () { resizeTimer = 0; fitSheets(); }, 120);
+    });
+  }
+
+  function boot() {
+    cache();
+    var saved = readCfg();
+    state.cfg = CORE.sanitizeCfg(saved);
+    if (!saved || I18N.langs.indexOf(state.cfg.lang) < 0) state.cfg.lang = detectLang();
+    I18N.setLang(state.cfg.lang);
+    buildLangSelect();
+    syncForm();
+    updatePageStyle();
+    applyI18n();
+    bind();
+    renderAll();
+    window.imgprint = { version: '1.0.0', core: CORE, i18n: I18N, state: state };
+  }
+
+  boot();
+})();
+</script>
+</body>
+</html>
