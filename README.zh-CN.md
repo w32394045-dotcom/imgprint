@@ -6,7 +6,7 @@
 - **主站**：[imgprint.xszx.cc.cd](https://imgprint.xszx.cc.cd/)
 - **备用**：[imgprint.w32394045.workers.dev](https://imgprint.w32394045.workers.dev/)
 - **GitHub Pages**：[w32394045-dotcom.github.io/imgprint](https://w32394045-dotcom.github.io/imgprint/)
-- **源码**：本仓库，一个文件 [`index.html`](index.html)，约 89 KB
+- **源码**：本仓库，一个文件 [`index.html`](index.html)，约 90 KB
 
 ---
 
@@ -35,14 +35,17 @@
 
 ## 页脚水印
 
-设置 → **页脚推广信息**（默认开）。每张打印出来的页面底部是：
+设置 → **页脚推广信息**（默认开）。每张打印出来的页面底部是两行：
 
 ```
 imgprint.xszx.cc.cd · github.com/w32394045-dotcom/imgprint
+Markdown 文档？md2pdf.xszx.cc.cd · github.com/w32394045-dotcom/md2pdf
 ```
 
-这两个地址是**故意印成文字的**：纸上的链接点不了，能传播的只有地址本身。屏幕上同一行文字是真链接。
-需要干净页面时在设置里关掉即可。想改成自己的项目，改 app 脚本顶部的 `SITE_TEXT` / `REPO_TEXT`。
+第一行是本工具；第二行互推同作者的 Markdown → PDF 工具
+[md2pdf](https://github.com/w32394045-dotcom/md2pdf)。网址**故意印成文字**：纸上的链接点不了，
+能传播的只有地址本身；屏幕上则是真链接。推荐语随界面语言切换（7 种）。需要干净页面时在设置里关掉；
+想改成自己的项目，改 app 脚本顶部的 `SITE_TEXT` / `REPO_TEXT` 和 `MD_*` 常量。
 
 ## 色彩：这个工具做什么、不做什么
 
@@ -96,7 +99,7 @@ imgprint.xszx.cc.cd · github.com/w32394045-dotcom/imgprint
 
 ## 国际化
 
-所有界面文案外置在 `I18N` 词表里：7 种语言 × 81 条 = 567 条。翻译按**意译**处理，
+所有界面文案外置在 `I18N` 词表里：7 种语言 × 82 条 = 574 条。翻译按**意译**处理，
 按目标语言的产品文案语感重写，不做逐字对照；key 是语义化的（`set.watermark`、`badge.dpiLow`），
 占位符是位置式的（`{0}`），构建时会校验 7 份词表的 key 与占位符完全一致，并检查 en/de/fr 没有中文残留、
 ja 有假名、ko 有韩文。
@@ -116,8 +119,8 @@ ja 有假名、ko 有韩文。
 开发期用 Node 闸门跑过（工具不入库，仓库只留单文件应用）：
 
 ```
-gate.js         PASS 122 · FAIL 0
-dom-smoke.js    PASS  28 · FAIL 0
+gate.js         PASS 125 · FAIL 0
+dom-smoke.js    PASS  32 · FAIL 0
 ```
 
 - 用 Pillow 造了 19 个真实图片夹具：sRGB/AdobeRGB/ProPhoto/P3 的 ICC（`desc` 与 v4 `mluc` 两种标签）、
@@ -126,7 +129,7 @@ dom-smoke.js    PASS  28 · FAIL 0
 - DOM 冒烟测试用最小 DOM 桩**真的执行 app.js**：导入真实夹具、渲染 3 页、检查水印、切到日文、
   开关水印，并通过真实的设置项 `change` 事件重新注入 `@page` 规则。
 - 版面 / DPI / 分页 / `@page` 全部对手算毫米值断言。
-- i18n：7 × 81 key 一致、占位符一致、en/de/fr 无中文、ja 有假名、ko 有韩文。
+- i18n：7 × 82 key 一致、占位符一致、en/de/fr 无中文、ja 有假名、ko 有韩文。
 - 卫生检查：单文件、无外链脚本/样式/远程 URL、无网络 API、无 HTML 注入 API、`localStorage` 仅 2 处、CSP 在位。
 
 **机器测不到的**：真实浏览器里的观感、打印对话框的实际行为（边距/背景图形要用户自己设）、
@@ -136,6 +139,12 @@ dom-smoke.js    PASS  28 · FAIL 0
 
 较新的 Chrome / Edge / Safari / Firefox。AVIF 都支持；HEIC 只有 Safari 能解（Chrome 会提示「打不开」，
 先转 JPEG/PNG）。PNG 的 iCCP 需要 `DecompressionStream`，不支持时降级为「ICC 配置」徽标。
+
+## 相关项目
+
+- **[md2pdf](https://github.com/w32394045-dotcom/md2pdf)** —— [md2pdf.xszx.cc.cd](https://md2pdf.xszx.cc.cd/) ·
+  同作者的单文件 Markdown → PDF 工具，适合讲义、题包和技术文档：LaTeX 公式与化学式、可渲染图形围栏、
+  表格与分页版式、7 种界面语言。要打印的是 Markdown 文档而不是图片时，用它。
 
 ## 许可
 

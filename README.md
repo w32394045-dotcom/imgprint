@@ -6,7 +6,7 @@ Everything runs locally: **no upload, no account, no history, no network request
 - **Live**: [imgprint.xszx.cc.cd](https://imgprint.xszx.cc.cd/)
 - **Mirror**: [imgprint.w32394045.workers.dev](https://imgprint.w32394045.workers.dev/)
 - **GitHub Pages**: [w32394045-dotcom.github.io/imgprint](https://w32394045-dotcom.github.io/imgprint/)
-- **Source**: this repository (one file: [`index.html`](index.html), ~89 KB)
+- **Source**: this repository (one file: [`index.html`](index.html), ~90 KB)
 
 ---
 
@@ -36,15 +36,19 @@ The whole app is one HTML file. Open it from disk, a USB stick, or your own stat
 
 ## Watermark
 
-Settings → **Footer watermark** (on by default). Each printed page carries:
+Settings → **Footer watermark** (on by default). Each printed page carries two lines:
 
 ```
 imgprint.xszx.cc.cd · github.com/w32394045-dotcom/imgprint
+Markdown docs? md2pdf.xszx.cc.cd · github.com/w32394045-dotcom/md2pdf
 ```
 
-The URLs are printed **as text on purpose** — a link on paper cannot be clicked, so the address
-itself is what gets promoted. On screen the same text is a real link. Turn the switch off if you
-need clean pages. Forking? Change `SITE_TEXT` / `REPO_TEXT` at the top of the app script.
+The first line is this tool; the second promotes its sibling
+[md2pdf](https://github.com/w32394045-dotcom/md2pdf) — the Markdown → PDF tool from the same author.
+The URLs are printed **as text on purpose**: a link on paper cannot be clicked, so the address itself
+is what gets promoted. On screen they are real links. The hint text is translated with the UI (7
+languages). Turn the switch off for clean pages; fork it and change `SITE_TEXT` / `REPO_TEXT` and the
+`MD_*` constants at the top of the app script.
 
 ## Color: what this tool does and does not do
 
@@ -105,7 +109,7 @@ lands at ~146 dpi — the badge will say so.
 
 ## Internationalization
 
-All UI copy is externalized in an `I18N` pack (7 locales × 81 strings, 567 strings total).
+All UI copy is externalized in an `I18N` pack (7 locales × 82 strings, 574 strings total).
 Translations are **sense-for-sense, written as native product copy** — not word-for-word
 renderings of the Chinese source. Keys are semantic (`set.watermark`, `badge.dpiLow`, …) and
 placeholders are positional (`{0}`); the build checks that every locale has exactly the same key
@@ -127,8 +131,8 @@ To add a language: duplicate a pack inside `index.html` (`var PACKS = {...}`), a
 Checked during development with a Node gate (not shipped — this repo is just the app):
 
 ```
-gate.js         PASS 122 · FAIL 0
-dom-smoke.js    PASS  28 · FAIL 0
+gate.js         PASS 125 · FAIL 0
+dom-smoke.js    PASS  32 · FAIL 0
 ```
 
 - 19 real image fixtures generated with Pillow — sRGB/AdobeRGB/ProPhoto/P3 ICC (both `desc` and
@@ -138,7 +142,7 @@ dom-smoke.js    PASS  28 · FAIL 0
   renders 3 pages, checks the printed watermark, switches to Japanese, toggles the watermark, and
   re-injects the `@page` rule through the actual settings `change` handlers.
 - Layout/DPI/pagination/`@page` math asserted against hand-computed millimetre values.
-- i18n: 7 × 81 keys, identical key and placeholder sets, no untranslated Chinese in en/de/fr,
+- i18n: 7 × 82 keys, identical key and placeholder sets, no untranslated Chinese in en/de/fr,
   kana present in ja, Hangul present in ko.
 - Hygiene: single file, no external script/style/URL, no network APIs, no HTML-injection APIs,
   2 `localStorage` writes (settings only), one inline script, CSP present.
@@ -152,6 +156,13 @@ DOM wiring are checked; the appearance needs a human eye — please open it once
 Current Chrome / Edge / Safari / Firefox. `AVIF` decodes in all current browsers; `HEIC` only in
 Safari (Chrome will show a "can't open" toast — convert to JPEG/PNG first). `deflate` decompression
 for PNG iCCP uses `DecompressionStream` when available and degrades to "ICC profile" otherwise.
+
+## Related projects
+
+- **[md2pdf](https://github.com/w32394045-dotcom/md2pdf)** — [md2pdf.xszx.cc.cd](https://md2pdf.xszx.cc.cd/) ·
+  the same author's single-file Markdown → PDF tool for lecture notes, problem sets and technical docs:
+  LaTeX maths and chemistry, renderable figure fences, table and page layout, 7 UI languages. If the
+  thing you need to print is Markdown instead of images, start there.
 
 ## License
 
